@@ -6,13 +6,13 @@ A zero-dependency Codex skill repo for monitoring [`@thsottiaux`](https://x.com/
 
 ## What It Does
 
-- Runs with Node.js only; no Python, pip, venv, npm install, or build step.
-- Includes replies, because reset notices may be terse answers inside threads.
-- Fetches reply thread context so the LLM can understand replies like “yes, later today”.
-- Sends all new unseen tweets/replies to the Automation LLM, not only rule-selected candidates.
-- Stores dedupe state in a small JSON file, not a database.
-- Retries transient TwitterAPI.io DNS/network failures before reporting them.
-- Avoids Telegram, Discord, Slack, email, ntfy, and generic webhooks.
+- Works out of the box: users provide only an API key, with no Python, dependency install, or build step.
+- Catches terse replies: answers like “yes, later today” are judged with their thread context.
+- Gives the LLM the full new batch: every unseen tweet/reply is reviewed, reducing rule prefilter misses.
+- Stays quiet when nothing matters: no reset/refill/restored-allowance signal means no finding.
+- Avoids repeat noise: the same tweet/reply is handled once, while future new posts remain eligible.
+- Handles network blips calmly: transient DNS/network failures do not immediately spam Triage.
+- Keeps one notification surface: findings appear only in Codex Automation/Triage, not external channels.
 
 ## Skill Layout
 
@@ -37,78 +37,61 @@ codex-reset-watchdog/
     self_test.mjs                  # Local deterministic tests
 ```
 
-## Setup
+## What You Need To Do
 
-The only thing the user must supply is a TwitterAPI.io API key. There are no project dependencies to install.
+Download this skill folder, then add a TwitterAPI.io API key. There are no project dependencies to install.
 
-Beginner-friendly setup:
+Start from GitHub:
 
-1. Open this folder in VS Code.
-2. Open the visible file `env.example`.
-3. Duplicate it and rename the copy to `env`.
-4. Replace only the API key placeholder.
-
-The script also supports `.env`, but files starting with `.` are hidden by default in macOS Finder. `env` is easier for non-technical users.
-
-Edit only the API key line to start:
+1. Open this project's GitHub page.
+2. Click the green `Code` button.
+3. Choose `Download ZIP`.
+4. Unzip the downloaded file.
+5. Open the unzipped `codex-reset-watchdog` folder in VS Code or Codex.
+6. Open the visible file `env.example`.
+7. Duplicate `env.example` and rename the copy to `env`.
+8. Open `env` and replace only this placeholder line:
 
 ```env
 TWITTERAPI_IO_KEY=PASTE_YOUR_TWITTERAPI_IO_KEY_HERE
 ```
 
-Get a TwitterAPI.io key:
+## Get An API Key
 
 1. Open <https://twitterapi.io/>.
 2. Sign up or log in.
 3. Open <https://twitterapi.io/dashboard>.
 4. Copy the API key shown on the dashboard homepage.
-5. Paste it into local `env`.
-
-Recommended defaults:
+5. Paste it into the local `env` file:
 
 ```env
-TARGET_X_HANDLE=thsottiaux
-STATE_FILE_PATH=~/.cache/codex-reset-watchdog/state.json
-INCLUDE_REPLIES=true
-HYDRATE_REPLY_CONTEXT=true
+TWITTERAPI_IO_KEY=your_key_goes_here
 ```
 
-Ask Codex to finish setup:
+Do not paste the API key into chat, and do not commit it to GitHub.
+
+## Create The Automation In Codex
+
+After filling `env`, open Codex, use Codex to open this project folder, then send this in Chat:
 
 ```text
-Run codex-reset-watchdog self_test, then prime state. Do not print my API key.
+Use the codex-reset-watchdog skill in the current folder to create a Codex Automation.
+
+Before creating it:
+1. Run node scripts/self_test.mjs
+2. Run node scripts/check_once.mjs --prime-state --json to initialize state
+
+Then create an Automation that runs every 1 hour:
+- working directory: the current codex-reset-watchdog folder
+- command: node scripts/check_once.mjs --include-replies true --hydrate-reply-context true --json
+- read review_items from the JSON output on every run
+- judge them with references/llm-judge-rubric.md
+- post a Codex Triage finding only for Codex usage/quota/rate-limit reset, refill, restored allowance, or remediation signals
+- archive silently when there is no signal
+- do not print, copy, or write my API key anywhere
 ```
 
-Codex should run:
-
-```bash
-node scripts/self_test.mjs
-node scripts/check_once.mjs --prime-state --json
-```
-
-## Manual Checks
-
-Dry-run without changing state:
-
-```bash
-node scripts/check_once.mjs --include-replies true --hydrate-reply-context true --dry-run --json
-```
-
-Prime state again if needed:
-
-```bash
-node scripts/check_once.mjs --prime-state --json
-```
-
-## Automation
-
-Create a Codex Automation using [`references/automation-prompt.md`](references/automation-prompt.md). Recommended cadence: every 30-60 minutes.
-
-Runtime command:
-
-```bash
-node scripts/check_once.mjs --include-replies true --hydrate-reply-context true --json
-```
+Codex will verify the script, prime the current tweets/replies as the baseline, then create the scheduled Automation. The durable Automation prompt lives in [`references/automation-prompt.md`](references/automation-prompt.md), and the LLM judging rubric lives in [`references/llm-judge-rubric.md`](references/llm-judge-rubric.md).
 
 ## State And Dedupe
 

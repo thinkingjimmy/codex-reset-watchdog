@@ -6,13 +6,13 @@
 
 ## 功能
 
-- 只依赖 Node.js；不需要 Python、pip、venv、npm install 或 build。
-- 默认包含 replies，因为 reset 通知可能只是 thread 里的短回复。
-- 对 reply 拉取 thread context，让 LLM 能理解 “yes, later today” 这类语义。
-- 所有新的未见 tweet/reply 都进入 LLM 审阅，不再由规则预先裁剪。
-- 用一个 JSON 状态文件去重，不使用数据库。
-- TwitterAPI.io DNS/network 短暂失败会先自动重试，连续失败才报警。
-- 不接 Telegram、Discord、Slack、email、ntfy 或通用 webhook。
+- 开箱即跑：普通用户只填 API key，不需要安装 Python、依赖包或构建工具。
+- 不错过短回复：thread 里的 “yes, later today” 也能被放到完整语境中判断。
+- 判断更像人：Codex Automation LLM 会审阅所有新内容，减少规则预筛带来的漏判。
+- 只在值得注意时打扰：没有 reset / refill / restored allowance 信号时静默归档。
+- 不重复提醒：同一条 tweet/reply 只处理一次，后续新消息仍可继续触发。
+- 网络抖动不刷屏：短暂 DNS/network 失败不会立刻变成噪声告警。
+- 通知面单一：所有结果只进入 Codex Automation / Triage，不外发到聊天软件或 webhook。
 
 ## Skill 结构
 
@@ -39,17 +39,22 @@ codex-reset-watchdog/
 
 ## 你只需要做什么
 
-你只需要准备一个 TwitterAPI.io API key。项目没有依赖要安装。
+你只需要下载这个 skill 文件夹，再填一个 TwitterAPI.io API key。项目没有依赖要安装。
 
-最省心的方式：
+从 GitHub 开始：
 
-1. 用 VS Code 打开这个文件夹。
-2. 打开可见文件 `env.example`。
-3. 复制一份，重命名为 `env`。
-4. 把 `TWITTERAPI_IO_KEY=PASTE_YOUR_TWITTERAPI_IO_KEY_HERE` 里的占位文字换成你的真实 key。
-5. 回到 Codex，告诉它：“帮我运行自测并 prime state。”
+1. 打开这个项目的 GitHub 页面。
+2. 点击绿色 `Code` 按钮。
+3. 选择 `Download ZIP`。
+4. 下载完成后解压 ZIP。
+5. 用 VS Code 或 Codex 打开解压出来的 `codex-reset-watchdog` 文件夹。
+6. 打开可见文件 `env.example`。
+7. 复制一份 `env.example`，把副本重命名为 `env`。
+8. 打开 `env`，只替换这一行里的占位文字：
 
-也可以把复制出来的文件命名为 `.env`，这是开发者常用名字；但 macOS Finder 默认会隐藏点开头文件。对普通用户，`env` 更直观，脚本会自动读取。
+```env
+TWITTERAPI_IO_KEY=PASTE_YOUR_TWITTERAPI_IO_KEY_HERE
+```
 
 ## 如何申请 API Key
 
@@ -65,36 +70,30 @@ TWITTERAPI_IO_KEY=你的_key_粘贴在这里
 
 不要把 API key 发到聊天里，不要提交到 GitHub。
 
-## 给 AI 的设置指令
+## 在 Codex 里创建 Automation
 
-用户填好 `env` 后，可以直接对 Codex 说：
+填好 `env` 后，打开 Codex，然后使用 Codex 打开这个项目文件夹，然后在 Chat 里发送：
 
 ```text
-请帮我运行 codex-reset-watchdog 的 self_test，然后 prime state。不要把我的 API key 输出到聊天里。
+请使用当前文件夹里的 codex-reset-watchdog skill 创建一个 Codex Automation。
+
+创建前先做两件事：
+1. 运行 node scripts/self_test.mjs
+2. 运行 node scripts/check_once.mjs --prime-state --json 初始化状态
+
+然后创建一个每 1 小时运行的 Automation：
+- 工作目录使用当前 codex-reset-watchdog 文件夹
+- 每次运行命令：node scripts/check_once.mjs --include-replies true --hydrate-reply-context true --json
+- 每次读取 JSON 里的 review_items
+- 按 references/llm-judge-rubric.md 判断是否有 Codex usage / quota / rate-limit reset、refill、restored allowance 或 remediation 信号
+- 只有判断为有信号时才发 Codex Triage finding
+- 没有信号时静默归档
+- 不要输出、复制或写入我的 API key
 ```
 
-Codex 应该代用户执行：
+Codex 会先验证脚本能跑，再把当前已有 tweets/replies 标记为基线，最后创建定时 Automation。之后你只需要等 Triage finding；没有 reset 信号时不会打扰你。
 
-```bash
-node scripts/self_test.mjs
-node scripts/check_once.mjs --prime-state --json
-```
-
-之后可以 dry run 一次：
-
-```bash
-node scripts/check_once.mjs --include-replies true --hydrate-reply-context true --dry-run --json
-```
-
-## Automation
-
-创建 Codex Automation 时使用 [`references/automation-prompt.md`](references/automation-prompt.md)。推荐每 30-60 分钟运行一次。
-
-运行命令：
-
-```bash
-node scripts/check_once.mjs --include-replies true --hydrate-reply-context true --json
-```
+底层 Automation 规则写在 [`references/automation-prompt.md`](references/automation-prompt.md)，LLM 判断标准写在 [`references/llm-judge-rubric.md`](references/llm-judge-rubric.md)。
 
 ## 状态与去重
 

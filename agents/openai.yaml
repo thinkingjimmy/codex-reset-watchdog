@@ -1,6 +1,6 @@
 interface:
   display_name: "Codex Reset Watchdog"
-  short_description: "Hybrid rule+LLM monitoring for Codex reset announcements, surfaced via Codex Automation/Triage."
-  default_prompt: "Set up a TwitterAPI.io one-shot Codex Automation check that reports in Triage when the configured account posts or replies about Codex usage, quota, or rate-limit resets. Use high-confidence rules plus Codex LLM review for ambiguous candidates."
+  short_description: "LLM-first monitoring for Codex reset announcements, surfaced via Codex Automation/Triage."
+  default_prompt: "Set up a zero-dependency Node TwitterAPI.io check. Each run should emit all new tweets and replies for Codex Automation's LLM to judge; report in Triage only when a Codex usage, quota, or rate-limit reset signal is present."
 policy:
   allow_implicit_invocation: true

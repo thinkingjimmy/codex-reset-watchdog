@@ -1,19 +1,19 @@
 ---
 name: codex-reset-watchdog
-description: Set up a Codex Automation-only, hybrid rule-plus-LLM check for pre-announcement tweets and replies about OpenAI Codex usage, quota, or rate-limit resets. Use when monitoring @thsottiaux or another X/Twitter account via TwitterAPI.io and notifying only through Codex Automation/Triage.
+description: Set up a Codex Automation-only, LLM-first check for pre-announcement tweets and replies about OpenAI Codex usage, quota, or rate-limit resets. Uses zero-dependency Node.js plus TwitterAPI.io and notifies only through Codex Automation/Triage.
 ---
 
 # Codex Reset Watchdog
 
-Use this skill to implement or maintain a **Codex Automation-only** TwitterAPI.io check. The default target is `@thsottiaux` (`https://x.com/thsottiaux`). The skill reports a Codex Automation finding when a tweet or reply likely announces a Codex usage/quota/rate-limit reset, quota refill, restored allowance, or related remediation.
+Use this skill to implement or maintain a **Codex Automation-only** TwitterAPI.io check. The default target is `@thsottiaux` (`https://x.com/thsottiaux`). The skill reports a Codex Automation finding when the Automation LLM judges that a tweet or reply likely announces, confirms, schedules, completes, or remediates a Codex usage/quota/rate-limit reset, quota refill, restored allowance, or related make-good.
 
-This skill intentionally does **not** send Telegram, Discord, Slack, ntfy, email, or generic webhook messages. The notification surface is Codex itself: `scripts/check_once.py` emits structured JSON, and the scheduled Codex Automation posts a Triage finding only when there is a high-confidence hit or a Codex LLM-promoted ambiguous candidate.
+This skill intentionally does **not** send Telegram, Discord, Slack, ntfy, email, or generic webhook messages. The notification surface is Codex itself: `scripts/check_once.mjs` emits structured JSON with `review_items`, and the scheduled Codex Automation posts a Triage finding only when its LLM sees a reset signal.
 
 ## Required setup shape
 
 The repo is GitHub-ready. Keep the checked-in visible template and create a private local `env` or `.env` file. Prefer `env` for beginner-facing setup because Finder hides dotfiles by default.
 
-The user should only need to supply the TwitterAPI.io API key. When setting this project up for a user, Codex should install dependencies, run tests, prime state, and dry-run the check itself instead of asking the user to run terminal commands.
+The user should only need to supply the TwitterAPI.io API key. There are no Python or npm dependencies to install. When setting this project up for a user, Codex should run the Node self-test, prime state, and dry-run the check itself instead of asking the user to run terminal commands.
 
 Ask the user to duplicate `env.example`, rename the copy to `env`, and edit only this line:
 
@@ -33,58 +33,46 @@ To get a TwitterAPI.io key, direct the user to sign in at <https://twitterapi.io
 
 ## Core behavior
 
-1. Use `scripts/check_once.py` as the runtime entrypoint for scheduled monitoring.
+1. Use `scripts/check_once.mjs` as the runtime entrypoint for scheduled monitoring.
 2. Include replies by default. Reset announcements may appear as replies rather than top-level tweets, so `INCLUDE_REPLIES=true` is the default.
 3. For new replies, fetch real thread context by default. This catches terse replies such as “yes, later today” when the parent tweet asks about a Codex usage reset.
-4. Use a **hybrid classifier**:
-   - deterministic rules auto-alert only high-confidence reset/refill/remediation announcements;
-   - medium/low ambiguous candidates are emitted as `llm_review_candidates` for Codex Automation's LLM to judge in that same run;
-   - clear negatives are suppressed without LLM review.
-5. Match on **announcement intent**, not just keywords. Alert when a tweet/reply says or strongly implies that Codex usage, quota, rate limits, weekly limits, caps, credits, allowance, or capacity will be reset/refilled/restored, or were just reset as remediation.
-6. Avoid false positives from non-quota meanings of reset: git reset, branch reset, cache reset, password reset, environment reset, session reset, config reset, reset button, reset command, or negated wording like “not going to reset”.
-7. Alert only once per tweet ID. Use the included JSON state file or an equivalent persistent store.
-8. Suppress repeated alerts for the same conversation/thread within `EVENT_DEDUPE_WINDOW_HOURS`, while allowing an optional later `completed_reset` phase update.
-9. Retry transient TwitterAPI.io DNS/network failures inside the same run. If all retries fail, emit JSON `status=transient_network_error` and report only after `OPERATIONAL_ERROR_REPORT_THRESHOLD` consecutive failures.
-10. On the first run, default to priming state rather than reporting old tweets. Set `ALERT_ON_FIRST_RUN=true` only when the user explicitly wants a historical scan.
-11. For alerts, include tweet text, reply context when used, author handle, tweet URL, category, confidence, score, matched terms, creation time, event key, and a concise rationale.
+4. Emit **every new unseen tweet/reply** as a `review_items` entry. Do not pre-filter the batch with deterministic reset rules.
+5. Let the Codex Automation LLM judge announcement intent. Alert when the tweet/reply says or strongly implies that Codex usage, quota, rate limits, weekly limits, caps, credits, allowance, or capacity will be reset/refilled/restored, or were just reset as remediation.
+6. The LLM should avoid false positives from non-quota meanings of reset: git reset, branch reset, cache reset, password reset, environment reset, session reset, config reset, reset button, reset command, or negated wording like “not going to reset”.
+7. Mark each emitted tweet ID as seen in the JSON state file so the same tweet/reply is not sent to the LLM every run.
+8. Retry transient TwitterAPI.io DNS/network failures inside the same run. If all retries fail, emit JSON `status=transient_network_error` and report only after `OPERATIONAL_ERROR_REPORT_THRESHOLD` consecutive failures.
+9. On the first run, default to priming state rather than reviewing old tweets. Set `ALERT_ON_FIRST_RUN=true` only when the user explicitly wants a historical scan.
+10. For findings, the Automation LLM should include tweet text, reply context when used, author handle, tweet URL, creation time, event key, and a concise rationale.
 
 ## Long-running lifecycle
 
 The Automation is meant to keep running indefinitely. A successful reset alert does **not** disable the Automation and does **not** stop future checks.
 
-State is split into two layers:
+State is split into two practical layers:
 
-- `seen_tweets`: every fetched new tweet/reply is marked seen after classification, so the same tweet is not reported again on the next run.
-- `reported_events`: high-confidence findings are grouped by `conversationId` or fallback tweet ID, so several target replies in the same thread do not spam Triage for the same reset event.
+- `seen_tweets`: every emitted new tweet/reply is marked seen, so the same tweet is not reviewed again on the next run.
 - `operational_failures`: transient TwitterAPI.io network failures are counted so one-off DNS failures can be ignored while repeated failures still surface.
 
 This means:
 
-- if a reset announcement is detected at 10:00, the run reports it and records that tweet/event;
-- the 10:30 run sees the same tweet but ignores it as already seen;
-- if a genuinely new reset announcement appears later with a new tweet ID or a new event key, it is eligible for a new finding;
-- if the same thread later gets a “done/reset complete” update, `EVENT_DEDUPE_ALLOW_PHASE_UPDATES=true` allows that completed phase to alert once.
+- if a reset announcement is detected at 10:00, the run emits it, the LLM reports it, and that tweet is marked seen;
+- the 10:30 run ignores the same tweet as already seen;
+- if a genuinely new reset announcement appears later with a new tweet ID, it is eligible for a new LLM review and finding;
+- if the same thread later gets a “done/reset complete” update as a new reply, it can still be reviewed once.
 
 Use a persistent `STATE_FILE_PATH`, preferably outside a repo worktree, such as `~/.cache/codex-reset-watchdog/state.json`.
 
 ## Files in this skill
 
 - `env.example`: copy/rename to `env`, paste the TwitterAPI.io key, and keep the recommended defaults.
-- `.gitignore`: ignores `env`, `.env`, local state files, virtualenvs, caches, and editor/OS files.
+- `.gitignore`: ignores `env`, `.env`, local state files, dependency folders, caches, and editor/OS files.
 - `README.md`: English usage tutorial with links.
 - `README.zh-CN.md`: Chinese usage tutorial with links.
-- `scripts/check_once.py`: one-shot TwitterAPI.io `last_tweets` check; the recommended entrypoint for Codex Automation.
-- `scripts/common.py`: compatibility exports for older imports.
-- `scripts/codex_reset_watch/classifier.py`: reset classifier, confidence scoring, and LLM-review gating.
-- `scripts/codex_reset_watch/config.py`: local env loading, typed env helpers, and API key lookup.
-- `scripts/codex_reset_watch/models.py`: `TweetCandidate` and `MatchDecision` dataclasses.
-- `scripts/codex_reset_watch/output.py`: Codex finding formatting and payload processing.
-- `scripts/codex_reset_watch/state.py`: JSON file state store for tweet/event dedupe.
-- `scripts/codex_reset_watch/text.py`: text normalization and matching helpers.
-- `scripts/codex_reset_watch/tweets.py`: tweet extraction, URL building, reply detection, and thread context helpers.
-- `scripts/self_test.py`: local deterministic tests.
+- `scripts/README.md`: runtime module map for entrypoints and boundaries.
+- `scripts/check_once.mjs`: zero-dependency Node TwitterAPI.io `last_tweets` check; the recommended entrypoint for Codex Automation.
+- `scripts/self_test.mjs`: local deterministic tests with no network calls.
 - `references/automation-prompt.md`: durable Codex Automation prompt to paste into the app.
-- `references/llm-judge-rubric.md`: rubric for judging `llm_review_candidates` inside Codex Automation.
+- `references/llm-judge-rubric.md`: rubric for judging `review_items` inside Codex Automation.
 - `references/deployment.md`: setup and operating notes.
 
 ## Recommended workflow
@@ -104,83 +92,68 @@ TARGET_X_HANDLE=thsottiaux
 STATE_FILE_PATH=~/.cache/codex-reset-watchdog/state.json
 INCLUDE_REPLIES=true
 HYDRATE_REPLY_CONTEXT=true
-CODEX_LLM_REVIEW_ENABLED=true
 ```
 
-### 2. Install dependencies for the user
+### 2. Run self-test
 
 ```bash
-python -m venv .venv
-. .venv/bin/activate
-pip install -r requirements.txt
+node scripts/self_test.mjs
 ```
 
-Do this yourself when the user asks for setup. Do not make the user run these commands unless tool execution is unavailable.
-
-### 3. Run self-test
-
-```bash
-python scripts/self_test.py
-```
-
-### 4. Prime state once
+### 3. Prime state once
 
 Priming prevents historical tweets from being reported as new automation findings.
 
 ```bash
-python scripts/check_once.py --prime-state --json
+node scripts/check_once.mjs --prime-state --json
 ```
 
-### 5. Test classification
+### 4. Test the LLM-first batch
 
 ```bash
-python scripts/check_once.py --include-replies true --hydrate-reply-context true --dry-run --json
+node scripts/check_once.mjs --include-replies true --hydrate-reply-context true --dry-run --json
 ```
 
-### 6. Create a Codex Automation
+### 5. Create a Codex Automation
 
-Use `references/automation-prompt.md`. A good cadence is every 30–60 minutes because reset posts are usually advance notices rather than instant events.
+Use `references/automation-prompt.md`. A good cadence is every 30-60 minutes because reset posts are usually advance notices rather than instant events.
 
 The Automation should run:
 
 ```bash
-python scripts/check_once.py --include-replies true --hydrate-reply-context true --json
+node scripts/check_once.mjs --include-replies true --hydrate-reply-context true --json
 ```
 
 Then it should:
 
-- report a Triage finding when `alerts > 0` and `finding_markdown` exists;
-- if `llm_review_candidates` exist, judge them using `references/llm-judge-rubric.md` and report only the candidates that should alert;
-- report command failures or repeated reply-context errors;
-- archive the run with no finding when there are no alerts and no promoted review candidates.
+- read `review_items` and judge every item using `references/llm-judge-rubric.md`;
+- report a Triage finding only when an item probably announces or confirms a Codex usage/quota/rate-limit reset, refill, restored allowance, or remediation;
+- if multiple items are clearly the same thread/event, report only the strongest one;
+- report command failures or repeated reply-context errors when likely to cause missed detections;
+- archive the run with no finding when there are no review items, no positive LLM judgment, and no reportable operational errors.
 
 ## Output contract
 
-`check_once.py --json` prints a JSON object. Important fields:
+`check_once.mjs --json` prints one JSON object. Important fields:
 
-- `status`: `ok`, `primed`, or `state_updated`.
-- `alerts`: number of new high-confidence matching tweets/replies.
-- `has_finding`: boolean; true when the script already produced a deterministic finding.
-- `finding_markdown`: ready-to-post Markdown for Codex Triage, present when high-confidence alerts exist.
-- `llm_review_count`: number of ambiguous candidates the Automation LLM should judge.
-- `llm_review_candidates`: structured ambiguous candidates with tweet text, reply context, score, matched terms, negative terms, and `finding_markdown_if_promoted`.
+- `status`: `ok`, `primed`, `state_updated`, `transient_network_error`, or `error`.
+- `review_count`: number of new unseen tweets/replies emitted for LLM review.
+- `has_review_items`: boolean; true when `review_items` is non-empty.
+- `review_items`: structured new tweets/replies with text, reply context, URL, author, event key, created time, and reply metadata.
+- `llm_instruction`: short instruction for judging this batch.
 - `reply_context_fetches`: number of thread context API lookups used.
-- `operational_error`: structured transient network error data; report only when `report_to_triage` is true.
-- `results`: per-tweet decisions with status, category, confidence, score, matched terms, negative terms, URL, event key, and reply metadata.
+- `operational_error`: structured transient/runtime error data; report according to the Automation prompt.
+- `results`: per-tweet handling details with statuses such as `queued_for_llm`, `already_seen`, and `ignored_repost`.
 
 ## Reply-aware language policy
 
-Auto-alert examples:
+Report examples:
 
 - “Heads up, we’ll reset Codex usage limits later today.”
 - “Planning to refill Codex weekly limits tomorrow.”
 - “Codex rate limits will be reset after the deploy.”
 - Reply: “yes, later today” with parent context “Will you reset Codex usage limits?”
 - Reply: “that’s the plan” with parent context “Any quota reset for Codex users affected by the outage?”
-
-LLM-review examples:
-
-- Reply: “working on it” with context about exhausted Codex weekly quota.
 - “Affected folks should be taken care of after the deploy” with nearby Codex limit context.
 - “Not exactly a reset, but limits should be restored soon.”
 
@@ -196,7 +169,7 @@ Suppress examples:
 
 - Do not add external notification channels unless the user explicitly asks for them later.
 - Keep `INCLUDE_REPLIES=true` and `HYDRATE_REPLY_CONTEXT=true` unless API cost becomes a problem.
-- Keep the matcher conservative: high-confidence goes straight to Triage; medium/low goes through Codex Automation LLM review.
+- Keep the script as a fact collector, not a semantic classifier. The LLM should be the judge.
 - Keep `STATE_FILE_PATH` persistent across automation runs.
 - Keep the real API key only in `env` or `.env`; `.gitignore` prevents committing it, but the user is still responsible for not sharing it.
-- If the target account becomes very active, reduce `CHECK_ONCE_MAX_PAGES` or raise `CODEX_LLM_REVIEW_MIN_SCORE` before reducing reply context support.
+- If the target account becomes very active, reduce `CHECK_ONCE_MAX_PAGES` or `THREAD_CONTEXT_MAX_FETCHES` before disabling reply context support.

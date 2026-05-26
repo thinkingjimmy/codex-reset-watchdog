@@ -12,14 +12,10 @@ state.json
 var/
 .cache/
 
-# Python
+# Local dependency and tool caches
+node_modules/
 .venv/
 venv/
-__pycache__/
-*.py[cod]
-.pytest_cache/
-.mypy_cache/
-.ruff_cache/
 
 # OS/editor
 .DS_Store

@@ -37,7 +37,6 @@ env.example
 README.md
 README.zh-CN.md
 SKILL.md
-requirements.txt
 agents/
 references/
 scripts/
@@ -48,7 +47,7 @@ Do not commit:
 ```text
 .env
 env
-.venv/
+node_modules/
 state.json
 *.state.json
 var/
@@ -59,13 +58,10 @@ var/
 
 ## Install and test
 
-Codex should run these setup commands for the user when possible. The user should only need to provide the API key.
+There is no install step. Codex should run this setup check for the user when possible:
 
 ```bash
-python -m venv .venv
-. .venv/bin/activate
-pip install -r requirements.txt
-python scripts/self_test.py
+node scripts/self_test.mjs
 ```
 
 ## First-run state priming
@@ -73,7 +69,7 @@ python scripts/self_test.py
 Run once before enabling the schedule:
 
 ```bash
-python scripts/check_once.py --prime-state --json
+node scripts/check_once.mjs --prime-state --json
 ```
 
 This prevents old tweets/replies from becoming new Codex Triage findings.
@@ -83,10 +79,10 @@ This prevents old tweets/replies from becoming new Codex Triage findings.
 Codex Automation should run:
 
 ```bash
-python scripts/check_once.py --include-replies true --hydrate-reply-context true --json
+node scripts/check_once.mjs --include-replies true --hydrate-reply-context true --json
 ```
 
-Recommended cadence: every 30–60 minutes.
+Recommended cadence: every 30-60 minutes.
 
 ## State path
 
@@ -104,19 +100,21 @@ The Automation should keep running after a finding.
 
 Expected behavior:
 
-1. New reset-related tweet/reply appears.
-2. Script outputs `has_finding=true` and `finding_markdown` or emits a candidate for LLM review.
-3. Codex Automation posts a Triage finding if appropriate.
-4. Script records the tweet/event in the JSON state file.
-5. Later runs ignore the same tweet/event.
-6. A future reset-related tweet/reply can still produce a new finding.
+1. New tweet/reply appears.
+2. Script outputs it in `review_items` with any fetched reply context.
+3. Codex Automation LLM judges whether it signals a Codex reset/refill/restored allowance/remediation.
+4. Automation posts a Triage finding only for positive judgments.
+5. Script records the tweet ID in the JSON state file.
+6. Later runs ignore the same tweet.
+7. A future tweet/reply with a new tweet ID can still produce a new finding.
 
 ## Failure handling
 
 Report a Codex Triage finding when:
 
-- `check_once.py` exits non-zero;
+- `check_once.mjs` exits non-zero;
 - TwitterAPI.io returns an authentication or API error;
+- JSON `status` is `error`;
 - JSON `status` is `transient_network_error` and `operational_error.report_to_triage` is true;
 - repeated thread-context errors are likely causing missed detections;
 - JSON output cannot be parsed.
@@ -133,7 +131,7 @@ TRANSIENT_NETWORK_ERRORS_EXIT_ZERO=true
 OPERATIONAL_ERROR_REPORT_THRESHOLD=3
 ```
 
-Do not report when there are simply no new tweets, no matching candidates, or a non-reportable transient network status.
+Do not report when there are simply no new tweets, no positive LLM judgments, or a non-reportable transient network status.
 
 ## Useful links
 

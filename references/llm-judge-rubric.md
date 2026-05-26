@@ -1,10 +1,10 @@
 # Codex Automation LLM judge rubric
 
-Use this rubric only for `llm_review_candidates` emitted by `scripts/check_once.py`. The Python script has already fetched the tweet/reply and any available thread context; do not infer missing thread content.
+Use this rubric for every item in `review_items` emitted by `scripts/check_once.mjs`. The Node script has already fetched the tweet/reply and any available thread context; do not infer missing thread content.
 
 ## Promote to a Triage finding when
 
-The candidate probably means one of these:
+The item probably means one of these:
 
 - Codex usage limits, weekly limits, quotas, rate limits, caps, credits, allowance, or capacity will be reset, refilled, restored, replenished, topped up, raised, or otherwise made good.
 - A reset/refill/remediation is scheduled or expected soon: later today, tomorrow, this week, after a deploy, after an incident, or similar.
@@ -17,12 +17,16 @@ The candidate probably means one of these:
 - The author negates the reset: no, nope, no reset, not planned, won’t, cannot, not doing that.
 - The context is too vague to connect it to Codex usage/quota/rate limits.
 - The tweet is only a generic outage/status update with no limit reset, refill, restored allowance, compensation, or make-good meaning.
-- The candidate relies on speculation outside the provided tweet and fetched thread context.
+- The judgment relies on speculation outside the provided tweet and fetched thread context.
 
 ## Output expectation inside Codex Automation
 
-If you promote a candidate, create one concise Codex Triage finding. Prefer the candidate’s `finding_markdown_if_promoted`, optionally adding a one-sentence LLM judgment note.
+If you promote an item, create one concise Codex Triage finding containing:
 
-If several candidates are clearly the same reset event in the same thread, report only the strongest one. Mention that duplicates were ignored.
+- why it likely signals a Codex reset/refill/restored allowance/remediation;
+- tweet text and reply context when relevant;
+- author, created time, URL, and event key.
 
-If no candidate should be promoted, archive the Automation run with no finding.
+If several items are clearly the same reset event in the same thread, report only the strongest one. Mention that duplicates were ignored.
+
+If no item should be promoted, archive the Automation run with no finding.

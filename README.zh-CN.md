@@ -117,6 +117,8 @@ STATE_FILE_PATH=~/.cache/codex-reset-watchdog/state.json
 - `review_count`：交给 LLM 审阅的新 tweet/reply 数量。
 - `has_review_items`：`review_items` 是否非空。
 - `review_items`：所有新的未见 tweet/reply，包含正文、URL、作者、回复元数据、event key 和回复上下文。
+- `api_pages`：每一页 API 返回的摘要，包括返回键、状态、message 和提取到的 tweet 数量。
+- `api_warning`：API 成功但没有提取到任何 tweet/reply 时出现，用来诊断目标账号、user id 或返回结构问题。
 - `llm_instruction`：给 Automation LLM 的简短判断指令。
 - `reply_context_fetches`：本次拉取 thread context 的次数。
 - `operational_error`：网络或运行错误；是否报警由 Automation prompt 决定。

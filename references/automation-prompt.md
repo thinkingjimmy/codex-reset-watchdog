@@ -20,15 +20,16 @@ Each run:
 5. If JSON `status` is `transient_network_error`, do not report a finding unless `operational_error.report_to_triage` is true. Keep the automation active and retry on the next scheduled run.
 6. If `operational_error.report_to_triage` is true, report one operational finding with `root_cause`, `detail`, `attempts`, and `consecutive_failures`.
 7. If JSON `status` is `error`, report one operational finding with the sanitized `operational_error.detail`.
-8. If `review_items` is non-empty, judge every item using `references/llm-judge-rubric.md`:
+8. If `api_warning` is present, report one operational finding with `target`, `fetched`, `api_warning`, and `api_pages`. This means the API call succeeded but no reviewable tweets/replies were extracted.
+9. If `review_items` is non-empty, judge every item using `references/llm-judge-rubric.md`:
    - promote only items that probably announce, confirm, schedule, complete, or remediate a Codex usage/quota/rate-limit reset, refill, restored allowance, or make-good;
    - use the tweet text, reply context, author, URL, created time, and event key from the item;
    - if multiple items are clearly the same thread/event, report only the strongest one;
    - if none should be promoted, do not report a finding for them.
-9. Report repeated reply-context errors only when they are likely causing missed detections.
-10. If there are no review items, no positive LLM judgments, and no reportable operational errors, archive the automation run with no finding.
-11. Do not send Telegram, Discord, Slack, ntfy, generic webhook, email, or any other external notification.
-12. Do not manually browse X/Twitter unless the TwitterAPI.io check fails repeatedly.
+10. Report repeated reply-context errors only when they are likely causing missed detections.
+11. If there are no review items, no positive LLM judgments, no API warning, and no reportable operational errors, archive the automation run with no finding.
+12. Do not send Telegram, Discord, Slack, ntfy, generic webhook, email, or any other external notification.
+13. Do not manually browse X/Twitter unless the TwitterAPI.io check fails repeatedly.
 
 Language policy:
 - Include replies from the target account. Reset announcements may be replies, not only top-level posts.

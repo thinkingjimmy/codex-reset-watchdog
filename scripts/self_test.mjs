@@ -18,6 +18,7 @@ import {
   eventKeyForTweet,
   extractTweets,
   processCandidates,
+  tweetsFromPayload,
 } from "./check_once.mjs";
 
 async function main() {
@@ -47,6 +48,8 @@ async function main() {
     const candidates = extractTweets({ tweets: [high, falsePositive, reply] });
     assert.equal(candidates.length, 3);
     assert.equal(eventKeyForTweet(candidates[2]), "150");
+    assert.equal(tweetsFromPayload({ data: { tweets: [high] } }).length, 1);
+    assert.equal(tweetsFromPayload({ result: { items: [falsePositive] } }).length, 1);
 
     const replyWithContext = attachThreadContext(candidates[2], [
       { id: "150", text: "Will you reset Codex usage limits for affected users?", author: { userName: "someone" } },

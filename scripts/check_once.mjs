@@ -331,6 +331,7 @@ export async function fetchLastTweets({ handle, userId, includeReplies, maxPages
   else baseParams.userName = String(handle).replace(/^@/, "");
 
   const tweets = [];
+  const pages = [];
   let cursor = "";
   for (let page = 0; page < Math.max(maxPages, 1); page += 1) {
     const payload = await getJsonWithRetries(LAST_TWEETS_URL, {
@@ -338,14 +339,15 @@ export async function fetchLastTweets({ handle, userId, includeReplies, maxPages
       timeout,
       operation: "last_tweets",
     });
-    if (payload.status === "error") throw new Error(payload.message || "TwitterAPI.io returned error status");
-    const pageTweets = Array.isArray(payload.tweets) ? payload.tweets : [];
+    if (payloadStatus(payload) === "error") throw new Error(payloadMessage(payload) || "TwitterAPI.io returned error status");
+    const pageTweets = tweetsFromPayload(payload);
+    pages.push(apiPageSummary(payload, pageTweets.length));
     tweets.push(...pageTweets.filter((item) => item && typeof item === "object"));
-    if (!payload.has_next_page) break;
-    cursor = String(payload.next_cursor || "");
+    if (!hasNextPage(payload)) break;
+    cursor = nextCursor(payload);
     if (!cursor) break;
   }
-  return tweets;
+  return { tweets, pages };
 }
 
 export async function fetchThreadContext(tweetId, { maxPages, timeout = 20 }) {
@@ -357,18 +359,74 @@ export async function fetchThreadContext(tweetId, { maxPages, timeout = 20 }) {
       timeout,
       operation: "thread_context",
     });
-    if (payload.status === "error") throw new Error(payload.message || "TwitterAPI.io thread_context returned error status");
-    const pageItems = Array.isArray(payload.replies)
-      ? payload.replies
-      : Array.isArray(payload.tweets)
-        ? payload.tweets
-        : [];
+    if (payloadStatus(payload) === "error") throw new Error(payloadMessage(payload) || "TwitterAPI.io thread_context returned error status");
+    const pageItems = threadItemsFromPayload(payload);
     context.push(...pageItems.filter((item) => item && typeof item === "object"));
-    if (!payload.has_next_page) break;
-    cursor = String(payload.next_cursor || "");
+    if (!hasNextPage(payload)) break;
+    cursor = nextCursor(payload);
     if (!cursor) break;
   }
   return context;
+}
+
+function firstArrayAt(payload, paths) {
+  for (const pathParts of paths) {
+    let current = payload;
+    for (const part of pathParts) current = current?.[part];
+    if (Array.isArray(current)) return current;
+  }
+  return [];
+}
+
+export function tweetsFromPayload(payload) {
+  return firstArrayAt(payload, [
+    ["tweets"],
+    ["data", "tweets"],
+    ["data", "items"],
+    ["result", "tweets"],
+    ["result", "items"],
+  ]);
+}
+
+function threadItemsFromPayload(payload) {
+  return firstArrayAt(payload, [
+    ["replies"],
+    ["tweets"],
+    ["data", "replies"],
+    ["data", "tweets"],
+    ["data", "items"],
+    ["result", "replies"],
+    ["result", "tweets"],
+    ["result", "items"],
+  ]);
+}
+
+function hasNextPage(payload) {
+  return Boolean(payload.has_next_page ?? payload.hasNextPage ?? payload.data?.has_next_page ?? payload.data?.hasNextPage);
+}
+
+function nextCursor(payload) {
+  return String(payload.next_cursor ?? payload.nextCursor ?? payload.data?.next_cursor ?? payload.data?.nextCursor ?? "");
+}
+
+function apiPageSummary(payload, tweetCount) {
+  return {
+    status: payloadStatus(payload),
+    message: payloadMessage(payload),
+    tweet_count: tweetCount,
+    has_next_page: hasNextPage(payload),
+    next_cursor_present: Boolean(nextCursor(payload)),
+    response_keys: Object.keys(payload).sort(),
+    data_keys: payload.data && typeof payload.data === "object" && !Array.isArray(payload.data) ? Object.keys(payload.data).sort() : [],
+  };
+}
+
+function payloadStatus(payload) {
+  return payload.status ?? payload.data?.status ?? payload.result?.status ?? null;
+}
+
+function payloadMessage(payload) {
+  return payload.message ?? payload.data?.message ?? payload.result?.message ?? null;
 }
 
 function tweetIdAsBigInt(tweetId) {
@@ -706,13 +764,16 @@ export async function main() {
   const store = new DedupeStore();
 
   let rawTweets = [];
+  let apiPages = [];
   try {
-    rawTweets = await fetchLastTweets({
+    const fetched = await fetchLastTweets({
       handle: args.handle || null,
       userId: args.userId || null,
       includeReplies: args.includeReplies,
       maxPages: Math.max(args.maxPages, 1),
     });
+    rawTweets = fetched.tweets;
+    apiPages = fetched.pages;
     store.clearOperationalFailure(NETWORK_FAILURE_KEY);
   } catch (error) {
     const summary =
@@ -736,6 +797,8 @@ export async function main() {
         status: initialRun ? "primed" : "state_updated",
         fetched: candidates.length,
         marked_seen: candidates.length,
+        api_pages: apiPages,
+        api_warning: candidates.length === 0 ? emptyFetchWarning(apiPages) : null,
         review_count: 0,
         has_review_items: false,
         review_items: [],
@@ -751,6 +814,8 @@ export async function main() {
       target: args.userId || `@${args.handle}`,
       fetched: candidates.length,
       new_items: reviewItems.length,
+      api_pages: apiPages,
+      api_warning: candidates.length === 0 ? emptyFetchWarning(apiPages) : null,
       reply_context_fetches: contextFetches,
       review_count: reviewItems.length,
       has_review_items: reviewItems.length > 0,
@@ -771,6 +836,11 @@ export async function main() {
     else console.log(summary.operational_error.detail);
     return 1;
   }
+}
+
+function emptyFetchWarning(apiPages) {
+  if (!apiPages.length) return "TwitterAPI.io returned no pages; check target handle/user id and API response.";
+  return "TwitterAPI.io call succeeded but no tweets were extracted. Inspect api_pages.response_keys/data_keys and try --user-id if the handle path returns an empty batch.";
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] || "").href) {

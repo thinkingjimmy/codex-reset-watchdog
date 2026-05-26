@@ -140,6 +140,8 @@ Then it should:
 - `review_count`: number of new unseen tweets/replies emitted for LLM review.
 - `has_review_items`: boolean; true when `review_items` is non-empty.
 - `review_items`: structured new tweets/replies with text, reply context, URL, author, event key, created time, and reply metadata.
+- `api_pages`: per-page API diagnostics with response keys, status/message, and extracted tweet count.
+- `api_warning`: present when the API succeeds but no tweet/reply can be extracted.
 - `llm_instruction`: short instruction for judging this batch.
 - `reply_context_fetches`: number of thread context API lookups used.
 - `operational_error`: structured transient/runtime error data; report according to the Automation prompt.

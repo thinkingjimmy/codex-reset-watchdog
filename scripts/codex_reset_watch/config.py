@@ -31,10 +31,11 @@ def _repo_root() -> Path:
 
 
 def _load_runtime_environment() -> None:
-    """Load .env first, then optional legacy secret files."""
+    """Load local env files first, then optional legacy secret files."""
     root = _repo_root()
 
     load_dotenv(root / ".env", override=False)
+    load_dotenv(root / "env", override=False)
     load_dotenv(override=False)
 
     secret_env_candidates = [
@@ -117,7 +118,7 @@ def require_api_key() -> str:
             return api_key
 
     raise RuntimeError(
-        "TwitterAPI.io API key is required. Copy .env.example to .env and "
+        "TwitterAPI.io API key is required. Copy env.example to env or .env and "
         "replace TWITTERAPI_IO_KEY=PASTE_YOUR_TWITTERAPI_IO_KEY_HERE with your real key."
     )
 

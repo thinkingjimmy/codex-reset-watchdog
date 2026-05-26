@@ -7,7 +7,7 @@ Use the $codex-reset-watch skill.
 
 Target account: `@thsottiaux` (`https://x.com/thsottiaux`). Use `TARGET_X_HANDLE=thsottiaux` unless `TARGET_X_USER_ID` is configured.
 
-The TwitterAPI.io key should be in the local `.env` file as `TWITTERAPI_IO_KEY=...`. Do not put the key in this prompt and do not report it in Triage.
+The TwitterAPI.io key should be in the local `env` or `.env` file as `TWITTERAPI_IO_KEY=...`. Do not put the key in this prompt and do not report it in Triage.
 
 Cadence: every 30 minutes, or hourly if lower cost/noise is preferred.
 
@@ -46,8 +46,7 @@ State/lifecycle:
 Before enabling the automation, prime the local state once:
 
 ```bash
-cp .env.example .env
-# Edit .env and replace TWITTERAPI_IO_KEY=PASTE_YOUR_TWITTERAPI_IO_KEY_HERE with the real key.
+# Duplicate env.example to env, then replace TWITTERAPI_IO_KEY=PASTE_YOUR_TWITTERAPI_IO_KEY_HERE with the real key.
 python scripts/check_once.py --prime-state --json
 ```
 

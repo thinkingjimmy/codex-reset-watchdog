@@ -23,7 +23,7 @@ codex-reset-watch/
   README.md                        # English setup guide
   README.zh-CN.md                  # Chinese setup guide
   requirements.txt                 # Python dependencies
-  .env.example                     # Local configuration template
+  env.example                      # Visible local configuration template
   .gitignore                       # Keeps secrets, caches, and state out of git
   agents/
     openai.yaml                    # Optional Codex skill display metadata
@@ -37,7 +37,7 @@ codex-reset-watch/
     common.py                      # Compatibility exports
     codex_reset_watch/
       classifier.py                # Reset classifier and review gating
-      config.py                    # .env loading, typed env helpers, API key lookup
+      config.py                    # env loading, typed env helpers, API key lookup
       models.py                    # TweetCandidate and MatchDecision dataclasses
       output.py                    # Finding formatting and payload processing
       state.py                     # JSON state file dedupe store
@@ -47,17 +47,30 @@ codex-reset-watch/
 
 ## Setup
 
-Create a private `.env`:
+The only thing the user must supply is a TwitterAPI.io API key. Dependency installation, self-test, state priming, and dry runs can be delegated to Codex.
 
-```bash
-cp .env.example .env
-```
+Beginner-friendly setup:
+
+1. Open this folder in VS Code.
+2. Open the visible file `env.example`.
+3. Duplicate it and rename the copy to `env`.
+4. Replace only the API key placeholder.
+
+The script also supports `.env`, but files starting with `.` are hidden by default in macOS Finder. `env` is easier for non-technical users.
 
 Edit only the API key line to start:
 
 ```env
 TWITTERAPI_IO_KEY=PASTE_YOUR_TWITTERAPI_IO_KEY_HERE
 ```
+
+Get a TwitterAPI.io key:
+
+1. Open <https://twitterapi.io/>.
+2. Sign up or log in.
+3. Open <https://twitterapi.io/dashboard>.
+4. Copy the API key shown on the dashboard homepage.
+5. Paste it into local `env`.
 
 Recommended defaults:
 
@@ -69,27 +82,34 @@ HYDRATE_REPLY_CONTEXT=true
 CODEX_LLM_REVIEW_ENABLED=true
 ```
 
-Install and test:
+Ask Codex to finish setup:
+
+```text
+Install dependencies for codex-reset-watch, run self_test, then prime state. Do not print my API key.
+```
+
+Codex should run:
 
 ```bash
 python -m venv .venv
 . .venv/bin/activate
 pip install -r requirements.txt
 python scripts/self_test.py
-```
-
-## First Run
-
-Prime state once so old tweets are not reported as new findings:
-
-```bash
 python scripts/check_once.py --prime-state --json
 ```
+
+## Manual Checks
 
 Dry-run classification without changing state:
 
 ```bash
 python scripts/check_once.py --include-replies true --hydrate-reply-context true --dry-run --json
+```
+
+Prime state again if needed:
+
+```bash
+python scripts/check_once.py --prime-state --json
 ```
 
 ## Automation

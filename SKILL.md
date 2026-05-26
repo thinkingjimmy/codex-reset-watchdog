@@ -11,13 +11,11 @@ This skill intentionally does **not** send Telegram, Discord, Slack, ntfy, email
 
 ## Required setup shape
 
-The repo is GitHub-ready. Keep the checked-in template and create a private local `.env`:
+The repo is GitHub-ready. Keep the checked-in visible template and create a private local `env` or `.env` file. Prefer `env` for beginner-facing setup because Finder hides dotfiles by default.
 
-```bash
-cp .env.example .env
-```
+The user should only need to supply the TwitterAPI.io API key. When setting this project up for a user, Codex should install dependencies, run tests, prime state, and dry-run the check itself instead of asking the user to run terminal commands.
 
-Then edit this line inside `.env`:
+Ask the user to duplicate `env.example`, rename the copy to `env`, and edit only this line:
 
 ```env
 TWITTERAPI_IO_KEY=PASTE_YOUR_TWITTERAPI_IO_KEY_HERE
@@ -29,7 +27,9 @@ The default target is already set:
 TARGET_X_HANDLE=thsottiaux
 ```
 
-`.env` is ignored by `.gitignore`; never commit the real key or paste it into the Automation prompt.
+`env` and `.env` are ignored by `.gitignore`; never commit the real key or paste it into the Automation prompt.
+
+To get a TwitterAPI.io key, direct the user to sign in at <https://twitterapi.io/>, open <https://twitterapi.io/dashboard>, and copy the API key shown on the dashboard homepage.
 
 ## Core behavior
 
@@ -67,14 +67,14 @@ Use a persistent `STATE_FILE_PATH`, preferably outside a repo worktree, such as 
 
 ## Files in this skill
 
-- `.env.example`: copy/rename to `.env`, paste the TwitterAPI.io key, and keep the recommended defaults.
-- `.gitignore`: ignores `.env`, local state files, virtualenvs, caches, and editor/OS files.
+- `env.example`: copy/rename to `env`, paste the TwitterAPI.io key, and keep the recommended defaults.
+- `.gitignore`: ignores `env`, `.env`, local state files, virtualenvs, caches, and editor/OS files.
 - `README.md`: English usage tutorial with links.
 - `README.zh-CN.md`: Chinese usage tutorial with links.
 - `scripts/check_once.py`: one-shot TwitterAPI.io `last_tweets` check; the recommended entrypoint for Codex Automation.
 - `scripts/common.py`: compatibility exports for older imports.
 - `scripts/codex_reset_watch/classifier.py`: reset classifier, confidence scoring, and LLM-review gating.
-- `scripts/codex_reset_watch/config.py`: `.env` loading, typed env helpers, and API key lookup.
+- `scripts/codex_reset_watch/config.py`: local env loading, typed env helpers, and API key lookup.
 - `scripts/codex_reset_watch/models.py`: `TweetCandidate` and `MatchDecision` dataclasses.
 - `scripts/codex_reset_watch/output.py`: Codex finding formatting and payload processing.
 - `scripts/codex_reset_watch/state.py`: JSON file state store for tweet/event dedupe.
@@ -87,13 +87,9 @@ Use a persistent `STATE_FILE_PATH`, preferably outside a repo worktree, such as 
 
 ## Recommended workflow
 
-### 1. Configure `.env`
+### 1. Configure local env
 
-```bash
-cp .env.example .env
-```
-
-Edit only the API key line to start:
+Tell the user to open the folder in VS Code, duplicate `env.example`, rename the copy to `env`, and edit only the API key line:
 
 ```env
 TWITTERAPI_IO_KEY=PASTE_YOUR_TWITTERAPI_IO_KEY_HERE
@@ -109,13 +105,15 @@ HYDRATE_REPLY_CONTEXT=true
 CODEX_LLM_REVIEW_ENABLED=true
 ```
 
-### 2. Install dependencies
+### 2. Install dependencies for the user
 
 ```bash
 python -m venv .venv
 . .venv/bin/activate
 pip install -r requirements.txt
 ```
+
+Do this yourself when the user asks for setup. Do not make the user run these commands unless tool execution is unavailable.
 
 ### 3. Run self-test
 
@@ -197,5 +195,5 @@ Suppress examples:
 - Keep `INCLUDE_REPLIES=true` and `HYDRATE_REPLY_CONTEXT=true` unless API cost becomes a problem.
 - Keep the matcher conservative: high-confidence goes straight to Triage; medium/low goes through Codex Automation LLM review.
 - Keep `STATE_FILE_PATH` persistent across automation runs.
-- Keep the real API key only in `.env`; `.gitignore` prevents committing it, but the user is still responsible for not sharing it.
+- Keep the real API key only in `env` or `.env`; `.gitignore` prevents committing it, but the user is still responsible for not sharing it.
 - If the target account becomes very active, reduce `CHECK_ONCE_MAX_PAGES` or raise `CODEX_LLM_REVIEW_MIN_SCORE` before reducing reply context support.

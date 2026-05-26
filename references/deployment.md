@@ -4,11 +4,12 @@ This repo is designed to be GitHub-safe and easy for a user to run.
 
 ## What the user edits
 
-Users should edit only their local `.env` file:
+Users should edit only their local `env` or `.env` file. Prefer `env` for beginner-facing setup because it is visible in Finder:
 
-```bash
-cp .env.example .env
-```
+1. Open the folder in VS Code.
+2. Duplicate `env.example`.
+3. Rename the copy to `env`.
+4. Replace only the API key placeholder.
 
 Then replace:
 
@@ -24,14 +25,14 @@ The target account is already set:
 TARGET_X_HANDLE=thsottiaux
 ```
 
-The full profile URL is `https://x.com/thsottiaux`, but `.env` should contain only the handle.
+The full profile URL is `https://x.com/thsottiaux`, but the local env file should contain only the handle.
 
 ## What should be committed
 
 Commit these files:
 
 ```text
-.env.example
+env.example
 .gitignore
 README.md
 README.zh-CN.md
@@ -46,6 +47,7 @@ Do not commit:
 
 ```text
 .env
+env
 .venv/
 state.json
 *.state.json
@@ -56,6 +58,8 @@ var/
 `.gitignore` is already configured for this.
 
 ## Install and test
+
+Codex should run these setup commands for the user when possible. The user should only need to provide the API key.
 
 ```bash
 python -m venv .venv

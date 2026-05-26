@@ -18,7 +18,7 @@ class DedupeStore:
         self.path.parent.mkdir(parents=True, exist_ok=True)
 
     def _empty_state(self) -> dict[str, Any]:
-        return {"seen_tweets": {}, "reported_events": {}}
+        return {"seen_tweets": {}, "reported_events": {}, "operational_failures": {}}
 
     def _load(self) -> dict[str, Any]:
         if not self.path.exists():
@@ -40,7 +40,11 @@ class DedupeStore:
         if not isinstance(events, dict):
             events = {}
 
-        return {"seen_tweets": seen, "reported_events": events}
+        failures = raw.get("operational_failures", {})
+        if not isinstance(failures, dict):
+            failures = {}
+
+        return {"seen_tweets": seen, "reported_events": events, "operational_failures": failures}
 
     def _save(self, state: dict[str, Any]) -> None:
         payload = json.dumps(state, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
@@ -113,4 +117,26 @@ class DedupeStore:
             "last_tweet_id": str(tweet_id),
             "reported_at": int(time.time()),
         }
+        self._save(state)
+
+    def record_operational_failure(self, key: str, detail: dict[str, Any]) -> dict[str, Any]:
+        state = self._load()
+        now = int(time.time())
+        failures = state["operational_failures"]
+        prior = failures.get(key) if isinstance(failures.get(key), dict) else {}
+        record = {
+            "count": int(prior.get("count") or 0) + 1,
+            "first_failed_at": int(prior.get("first_failed_at") or now),
+            "last_failed_at": now,
+            "detail": detail,
+        }
+        failures[key] = record
+        self._save(state)
+        return record
+
+    def clear_operational_failure(self, key: str) -> None:
+        state = self._load()
+        if key not in state["operational_failures"]:
+            return
+        del state["operational_failures"][key]
         self._save(state)

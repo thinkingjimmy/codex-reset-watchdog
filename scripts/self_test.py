@@ -65,6 +65,12 @@ def main() -> int:
         store.mark_event_reported(key, reply_decision.category, reply.id)
         suppressed, reason = store.should_suppress_event(key, reply_decision.category)
         assert_true(suppressed and bool(reason), "same event should be suppressed inside window")
+        failure = store.record_operational_failure("twitterapi_network", {"root_cause": "dns_resolution_failure"})
+        assert_true(failure["count"] == 1, "first operational failure should count as one")
+        failure = store.record_operational_failure("twitterapi_network", {"root_cause": "dns_resolution_failure"})
+        assert_true(failure["count"] == 2, "second operational failure should increment count")
+        store.clear_operational_failure("twitterapi_network")
+        assert_true("twitterapi_network" not in store._load()["operational_failures"], "successful run should clear operational failure state")
 
     print("self_test passed")
     return 0

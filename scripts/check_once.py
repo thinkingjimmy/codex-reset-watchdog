@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import os
 import sys
+import time
 from pathlib import Path
 from typing import Any
 
@@ -34,6 +35,27 @@ from scripts.common import (  # noqa: E402
 
 LAST_TWEETS_URL = "https://api.twitterapi.io/twitter/user/last_tweets"
 THREAD_CONTEXT_URL = "https://api.twitterapi.io/twitter/tweet/thread_context"
+NETWORK_FAILURE_KEY = "twitterapi_network"
+
+
+class TwitterAPITransientError(RuntimeError):
+    def __init__(self, *, operation: str, url: str, attempts: int, exc: BaseException) -> None:
+        super().__init__(str(exc))
+        self.operation = operation
+        self.url = url
+        self.attempts = attempts
+        self.exc = exc
+        self.root_cause = _network_root_cause(exc)
+
+    def to_summary(self) -> dict[str, Any]:
+        return {
+            "type": type(self.exc).__name__,
+            "operation": self.operation,
+            "url": self.url,
+            "attempts": self.attempts,
+            "root_cause": self.root_cause,
+            "detail": _sanitize_exception(self.exc),
+        }
 
 
 def _bool_arg(value: str) -> bool:
@@ -43,6 +65,74 @@ def _bool_arg(value: str) -> bool:
     if value in {"0", "false", "no", "n", "off"}:
         return False
     raise argparse.ArgumentTypeError(f"Expected boolean, got {value!r}")
+
+
+def _sanitize_exception(exc: BaseException) -> str:
+    detail = " ".join(str(exc).split())
+    max_chars = 500
+    if len(detail) > max_chars:
+        return detail[:max_chars].rstrip() + "..."
+    return detail
+
+
+def _network_root_cause(exc: BaseException) -> str:
+    detail = str(exc).lower()
+    dns_markers = [
+        "nameresolutionerror",
+        "nodename nor servname",
+        "temporary failure in name resolution",
+        "name or service not known",
+        "getaddrinfo failed",
+    ]
+    if any(marker in detail for marker in dns_markers):
+        return "dns_resolution_failure"
+    if isinstance(exc, requests.exceptions.Timeout):
+        return "timeout"
+    return "connection_error"
+
+
+def _retry_delay(attempt: int) -> int:
+    base = max(env_int("TWITTERAPI_IO_RETRY_SLEEP_SECONDS", 5), 0)
+    cap = max(env_int("TWITTERAPI_IO_RETRY_MAX_SLEEP_SECONDS", 30), 0)
+    if base == 0 or cap == 0:
+        return 0
+    return min(cap, base * (2 ** max(attempt - 1, 0)))
+
+
+def _get_json_with_retries(
+    url: str,
+    *,
+    headers: dict[str, str],
+    params: dict[str, Any],
+    timeout: int,
+    operation: str,
+) -> dict[str, Any]:
+    attempts = max(env_int("TWITTERAPI_IO_RETRY_ATTEMPTS", 3), 1)
+    last_exc: BaseException | None = None
+    for attempt in range(1, attempts + 1):
+        try:
+            response = requests.get(url, headers=headers, params=params, timeout=timeout)
+            response.raise_for_status()
+            payload = response.json()
+            if not isinstance(payload, dict):
+                raise RuntimeError("TwitterAPI.io response is not a JSON object")
+            return payload
+        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as exc:
+            last_exc = exc
+            if attempt >= attempts:
+                break
+            delay = _retry_delay(attempt)
+            if delay:
+                time.sleep(delay)
+        except requests.exceptions.HTTPError as exc:
+            status = exc.response.status_code if exc.response is not None else 0
+            if status not in {429, 500, 502, 503, 504} or attempt >= attempts:
+                raise
+            delay = _retry_delay(attempt)
+            if delay:
+                time.sleep(delay)
+    assert last_exc is not None
+    raise TwitterAPITransientError(operation=operation, url=url, attempts=attempts, exc=last_exc)
 
 
 def fetch_last_tweets(
@@ -69,9 +159,13 @@ def fetch_last_tweets(
         page_params = dict(params)
         if cursor:
             page_params["cursor"] = cursor
-        response = requests.get(LAST_TWEETS_URL, headers=headers, params=page_params, timeout=timeout)
-        response.raise_for_status()
-        payload = response.json()
+        payload = _get_json_with_retries(
+            LAST_TWEETS_URL,
+            headers=headers,
+            params=page_params,
+            timeout=timeout,
+            operation="last_tweets",
+        )
         if payload.get("status") == "error":
             raise RuntimeError(payload.get("message") or "TwitterAPI.io returned error status")
         page_tweets = payload.get("tweets") or []
@@ -95,9 +189,13 @@ def fetch_thread_context(tweet_id: str, *, max_pages: int, timeout: int = 20) ->
         params: dict[str, Any] = {"tweetId": tweet_id}
         if cursor:
             params["cursor"] = cursor
-        response = requests.get(THREAD_CONTEXT_URL, headers=headers, params=params, timeout=timeout)
-        response.raise_for_status()
-        payload = response.json()
+        payload = _get_json_with_retries(
+            THREAD_CONTEXT_URL,
+            headers=headers,
+            params=params,
+            timeout=timeout,
+            operation="thread_context",
+        )
         if payload.get("status") == "error":
             raise RuntimeError(payload.get("message") or "TwitterAPI.io thread_context returned error status")
         page_items = payload.get("replies") or payload.get("tweets") or []
@@ -176,15 +274,47 @@ def main() -> int:
     args = build_arg_parser().parse_args()
     handle = args.handle.lstrip("@") if args.handle else ""
     user_id = args.user_id or ""
-
-    raw_tweets = fetch_last_tweets(
-        handle=handle or None,
-        user_id=user_id or None,
-        include_replies=args.include_replies,
-        max_pages=max(args.max_pages, 1),
-    )
-    candidates = extract_tweets({"tweets": sorted(raw_tweets, key=tweet_sort_key)})
     store = DedupeStore()
+
+    try:
+        raw_tweets = fetch_last_tweets(
+            handle=handle or None,
+            user_id=user_id or None,
+            include_replies=args.include_replies,
+            max_pages=max(args.max_pages, 1),
+        )
+        store.clear_operational_failure(NETWORK_FAILURE_KEY)
+    except TwitterAPITransientError as exc:
+        failure = store.record_operational_failure(NETWORK_FAILURE_KEY, exc.to_summary())
+        threshold = max(env_int("OPERATIONAL_ERROR_REPORT_THRESHOLD", 3), 1)
+        summary = {
+            "status": "transient_network_error",
+            "target": user_id or f"@{handle}",
+            "alerts": 0,
+            "has_finding": False,
+            "finding_markdown": None,
+            "llm_review_count": 0,
+            "has_llm_review_candidates": False,
+            "llm_review_candidates": [],
+            "notification_surface": "codex_automation_triage",
+            "dry_run": bool(args.dry_run),
+            "operational_error": {
+                **exc.to_summary(),
+                "consecutive_failures": int(failure["count"]),
+                "report_to_triage": int(failure["count"]) >= threshold,
+                "report_threshold": threshold,
+                "retry_next_run": True,
+                "message": "Transient TwitterAPI.io network failure; keep automation active and retry on the next run.",
+            },
+            "results": [],
+        }
+        if args.json:
+            print(pretty_json(summary))
+        else:
+            print(f"Transient TwitterAPI.io network error after {exc.attempts} attempt(s): {exc.root_cause}")
+        return 0 if env_bool("TRANSIENT_NETWORK_ERRORS_EXIT_ZERO", True) else 75
+
+    candidates = extract_tweets({"tweets": sorted(raw_tweets, key=tweet_sort_key)})
 
     initial_run = store.count() == 0
     if args.prime_state or (initial_run and not args.alert_on_first_run and not args.dry_run):

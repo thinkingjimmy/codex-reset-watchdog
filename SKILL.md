@@ -44,8 +44,9 @@ To get a TwitterAPI.io key, direct the user to sign in at <https://twitterapi.io
 6. Avoid false positives from non-quota meanings of reset: git reset, branch reset, cache reset, password reset, environment reset, session reset, config reset, reset button, reset command, or negated wording like “not going to reset”.
 7. Alert only once per tweet ID. Use the included JSON state file or an equivalent persistent store.
 8. Suppress repeated alerts for the same conversation/thread within `EVENT_DEDUPE_WINDOW_HOURS`, while allowing an optional later `completed_reset` phase update.
-9. On the first run, default to priming state rather than reporting old tweets. Set `ALERT_ON_FIRST_RUN=true` only when the user explicitly wants a historical scan.
-10. For alerts, include tweet text, reply context when used, author handle, tweet URL, category, confidence, score, matched terms, creation time, event key, and a concise rationale.
+9. Retry transient TwitterAPI.io DNS/network failures inside the same run. If all retries fail, emit JSON `status=transient_network_error` and report only after `OPERATIONAL_ERROR_REPORT_THRESHOLD` consecutive failures.
+10. On the first run, default to priming state rather than reporting old tweets. Set `ALERT_ON_FIRST_RUN=true` only when the user explicitly wants a historical scan.
+11. For alerts, include tweet text, reply context when used, author handle, tweet URL, category, confidence, score, matched terms, creation time, event key, and a concise rationale.
 
 ## Long-running lifecycle
 
@@ -55,6 +56,7 @@ State is split into two layers:
 
 - `seen_tweets`: every fetched new tweet/reply is marked seen after classification, so the same tweet is not reported again on the next run.
 - `reported_events`: high-confidence findings are grouped by `conversationId` or fallback tweet ID, so several target replies in the same thread do not spam Triage for the same reset event.
+- `operational_failures`: transient TwitterAPI.io network failures are counted so one-off DNS failures can be ignored while repeated failures still surface.
 
 This means:
 
@@ -163,6 +165,7 @@ Then it should:
 - `llm_review_count`: number of ambiguous candidates the Automation LLM should judge.
 - `llm_review_candidates`: structured ambiguous candidates with tweet text, reply context, score, matched terms, negative terms, and `finding_markdown_if_promoted`.
 - `reply_context_fetches`: number of thread context API lookups used.
+- `operational_error`: structured transient network error data; report only when `report_to_triage` is true.
 - `results`: per-tweet decisions with status, category, confidence, score, matched terms, negative terms, URL, event key, and reply metadata.
 
 ## Reply-aware language policy

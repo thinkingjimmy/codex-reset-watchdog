@@ -117,10 +117,23 @@ Report a Codex Triage finding when:
 
 - `check_once.py` exits non-zero;
 - TwitterAPI.io returns an authentication or API error;
+- JSON `status` is `transient_network_error` and `operational_error.report_to_triage` is true;
 - repeated thread-context errors are likely causing missed detections;
 - JSON output cannot be parsed.
 
-Do not report when there are simply no new tweets or no matching candidates.
+Do not report one-off DNS/network failures. The script retries transient TwitterAPI.io connection failures inside the same run, then records consecutive failures in `STATE_FILE_PATH`.
+
+Useful knobs:
+
+```env
+TWITTERAPI_IO_RETRY_ATTEMPTS=3
+TWITTERAPI_IO_RETRY_SLEEP_SECONDS=5
+TWITTERAPI_IO_RETRY_MAX_SLEEP_SECONDS=30
+TRANSIENT_NETWORK_ERRORS_EXIT_ZERO=true
+OPERATIONAL_ERROR_REPORT_THRESHOLD=3
+```
+
+Do not report when there are simply no new tweets, no matching candidates, or a non-reportable transient network status.
 
 ## Useful links
 

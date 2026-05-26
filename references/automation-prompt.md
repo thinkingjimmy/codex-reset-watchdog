@@ -16,17 +16,19 @@ Each run:
 2. Run:
    python scripts/check_once.py --include-replies true --hydrate-reply-context true --json
 3. Read the JSON output.
-4. If the command fails, report a Codex Triage finding with the error and the command output. Do not include any secret values.
-5. If `alerts > 0` and `finding_markdown` exists, report `finding_markdown` as a Codex Triage finding.
-6. If `llm_review_candidates` is non-empty, judge those candidates using `references/llm-judge-rubric.md`:
+4. If the command fails before producing JSON, report a Codex Triage finding with the sanitized error and command output. Do not include any secret values.
+5. If JSON `status` is `transient_network_error`, do not report a finding unless `operational_error.report_to_triage` is true. Keep the automation active and retry on the next scheduled run.
+6. If `operational_error.report_to_triage` is true, report one operational finding with `root_cause`, `detail`, `attempts`, and `consecutive_failures`.
+7. If `alerts > 0` and `finding_markdown` exists, report `finding_markdown` as a Codex Triage finding.
+8. If `llm_review_candidates` is non-empty, judge those candidates using `references/llm-judge-rubric.md`:
    - promote only candidates that probably announce or confirm a Codex usage/quota/rate-limit reset, refill, restored allowance, or remediation;
    - use `finding_markdown_if_promoted` as the body for promoted candidates;
    - if multiple candidates are clearly the same thread/event, report only the strongest one;
    - if none should be promoted, do not report a finding for them.
-7. Report repeated reply-context errors only when they are likely causing missed detections.
-8. If there are no deterministic alerts, no promoted LLM-review candidates, and no operational errors, archive the automation run with no finding.
-9. Do not send Telegram, Discord, Slack, ntfy, generic webhook, email, or any other external notification.
-10. Do not manually browse X/Twitter unless the TwitterAPI.io check fails.
+9. Report repeated reply-context errors only when they are likely causing missed detections.
+10. If there are no deterministic alerts, no promoted LLM-review candidates, and no reportable operational errors, archive the automation run with no finding.
+11. Do not send Telegram, Discord, Slack, ntfy, generic webhook, email, or any other external notification.
+12. Do not manually browse X/Twitter unless the TwitterAPI.io check fails repeatedly.
 
 Language policy:
 - Include replies from the target account. Reset announcements may be replies, not only top-level posts.
@@ -40,6 +42,7 @@ State/lifecycle:
 - The Automation should continue running after a finding. Do not pause or disable it after a reset alert.
 - The script marks seen tweet IDs in the state file, so the same tweet should not alert again.
 - A future tweet/reply with a new tweet ID or new event key should be treated as a new candidate and can produce a new finding.
+- Transient TwitterAPI.io DNS/network failures are retried inside the script. One-off failures should not create noisy findings.
 - Keep `STATE_FILE_PATH` persistent across runs, preferably `~/.cache/codex-reset-watch/state.json`.
 ```
 

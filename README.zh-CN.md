@@ -2,7 +2,7 @@
 
 [English README](README.md)
 
-这是一个 Codex skill 仓库，用 **Codex Automation** 通过 TwitterAPI.io 监控 [`@thsottiaux`](https://x.com/thsottiaux) 的 tweets 和 replies。命中 Codex usage / quota / rate-limit reset 相关内容时，只通过 Codex Automation / Triage 输出 finding。
+这是一个 Codex skill 仓库，用 **Codex Automation** 通过 TwitterAPI.io 监控 [`@thsottiaux`](https://x.com/thsottiaux) 的 tweets 和 replies。命中 Codex usage / quota / rate-limit reset 相关内容时，会通过 Codex Automation / Triage 输出 finding。
 
 ## 你只需要做什么
 
@@ -39,6 +39,7 @@ TWITTERAPI_IO_KEY=你的_key_粘贴在这里
 - 高置信度命中由规则自动推送。
 - 中低置信度候选交给 Codex Automation 的 LLM 复判。
 - 用一个 JSON 状态文件去重，不使用数据库。
+- TwitterAPI.io DNS/network 短暂失败会先自动重试，连续失败才报警。
 - 不接 Telegram、Discord、Slack、email、ntfy 或通用 webhook。
 
 ## Skill 结构
@@ -131,7 +132,10 @@ STATE_FILE_PATH=~/.cache/codex-reset-watch/state.json
 - `finding_markdown`：高置信度命中时可直接发布的 Markdown。
 - `llm_review_candidates`：需要 Codex Automation LLM 复判的候选。
 - `reply_context_fetches`：本次拉取 thread context 的次数。
+- `operational_error`：TwitterAPI.io DNS/network 短暂失败时出现；只有 `report_to_triage=true` 才需要报警。
 - `results`：每条 tweet/reply 的分类细节。
+
+`api.twitterapi.io` 的 DNS 抖动会在同一轮内自动重试。如果重试后仍失败，脚本会输出 `status: "transient_network_error"` 并正常退出，避免一次网络抖动就刷 Triage。
 
 ## 链接
 

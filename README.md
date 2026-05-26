@@ -11,6 +11,7 @@ A Codex skill repo for monitoring [`@thsottiaux`](https://x.com/thsottiaux) with
 - Uses deterministic rules for high-confidence alerts.
 - Emits ambiguous candidates for Codex Automation's LLM review.
 - Stores dedupe state in a small JSON file, not a database.
+- Retries transient TwitterAPI.io DNS/network failures before reporting them.
 - Avoids Telegram, Discord, Slack, email, ntfy, and generic webhooks.
 
 ## Skill Layout
@@ -146,7 +147,10 @@ STATE_FILE_PATH=~/.cache/codex-reset-watch/state.json
 - `finding_markdown`: ready-to-post Markdown when deterministic alerts exist.
 - `llm_review_candidates`: ambiguous candidates for Codex Automation's LLM.
 - `reply_context_fetches`: number of TwitterAPI.io thread-context lookups.
+- `operational_error`: present for transient TwitterAPI.io DNS/network failures; report only when `report_to_triage` is true.
 - `results`: per-tweet classification details.
+
+Transient DNS failures for `api.twitterapi.io` are retried inside the same run. If all retries fail, the script exits cleanly with `status: "transient_network_error"` so one-off network blips do not spam Triage.
 
 ## Links
 

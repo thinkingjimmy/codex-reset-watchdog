@@ -11,6 +11,7 @@
 - 判断更像人：Codex Automation LLM 会审阅所有新内容，减少规则预筛带来的漏判。
 - 只在值得注意时打扰：没有 reset / refill / restored allowance 信号时静默归档。
 - 不重复提醒：同一条 tweet/reply 只处理一次，后续新消息仍可继续触发。
+- 更省 API credit：普通巡检默认使用 Advanced Search 的 `since_time/until_time` 增量窗口，不再每轮重复拉最近 40 条。
 - 网络抖动不刷屏：短暂 DNS/network 失败不会立刻变成噪声告警。
 - 通知面单一：所有结果只进入 Codex Automation / Triage，不外发到聊天软件或 webhook。
 
@@ -131,12 +132,33 @@ STATE_FILE_PATH=var/state.json
 - `api_pages`：每一页 API 返回的摘要，包括返回键、状态、message 和提取到的 tweet 数量。
 - `api_warning`：API 成功但没有提取到任何 tweet/reply 时出现，用来诊断目标账号、user id 或返回结构问题。
 - `state`：实际使用的状态文件路径、用户请求的路径、是否发生 fallback，以及相关 warning。
+- `fetch_strategy`：抓取策略，默认是 `advanced_search`；如需回退旧逻辑可设为 `last_tweets`。
 - `llm_instruction`：给 Automation LLM 的简短判断指令。
 - `reply_context_fetches`：本次拉取 thread context 的次数。
 - `operational_error`：网络或运行错误；是否报警由 Automation prompt 决定。
 - `results`：每条 tweet/reply 的处理细节，例如 `queued_for_llm`、`already_seen`、`ignored_repost`。
 
 `api.twitterapi.io` 的 DNS 抖动会在同一轮内自动重试。如果重试后仍失败，脚本会输出 `status: "transient_network_error"` 并正常退出，避免一次网络抖动就刷 Triage。
+
+## API credit 与增量抓取
+
+TwitterAPI.io 官方文档提醒：如果只是高频监控单个账号的新 tweets，不建议反复调用 `last_tweets`，因为它每页最多返回 20 条，频繁调用会产生较高成本。这个 skill 默认改用 `advanced_search`：
+
+```env
+FETCH_STRATEGY=advanced_search
+INCREMENTAL_OVERLAP_SECONDS=300
+INCREMENTAL_BOOTSTRAP_LOOKBACK_SECONDS=7200
+CHECK_ONCE_MAX_PAGES=1
+```
+
+运行逻辑是：
+
+- 首次 prime 时建立 checkpoint。
+- 普通定时运行只搜索上次成功检查之后的时间窗口。
+- 为避免时钟误差，窗口会向前重叠 `INCREMENTAL_OVERLAP_SECONDS` 秒。
+- 如果没有新 tweet/reply，通常只产生一次空窗口搜索，而不是重复返回 20-40 条旧内容。
+
+如果 Advanced Search 临时不可用，可以设置 `FETCH_STRATEGY=last_tweets` 回退旧逻辑；这会更稳但更耗 credit。
 
 ## 权限建议
 
@@ -192,6 +214,7 @@ node scripts/check_once.mjs --diagnose-network --json
 - TwitterAPI.io 文档：<https://docs.twitterapi.io/introduction>
 - TwitterAPI.io 认证：<https://docs.twitterapi.io/authentication>
 - TwitterAPI.io `last_tweets`：<https://docs.twitterapi.io/api-reference/endpoint/get_user_last_tweets>
+- TwitterAPI.io `advanced_search`：<https://docs.twitterapi.io/api-reference/endpoint/tweet_advanced_search>
 - TwitterAPI.io `thread_context`：<https://docs.twitterapi.io/api-reference/endpoint/get_tweet_thread_context>
 - Codex Skills 文档：<https://developers.openai.com/codex/skills>
 - Codex Automations 文档：<https://developers.openai.com/codex/app/automations>

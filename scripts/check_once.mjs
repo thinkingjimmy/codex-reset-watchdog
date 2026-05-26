@@ -14,6 +14,7 @@ import process from "node:process";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 export const LAST_TWEETS_URL = "https://api.twitterapi.io/twitter/user/last_tweets";
+export const ADVANCED_SEARCH_URL = "https://api.twitterapi.io/twitter/tweet/advanced_search";
 export const THREAD_CONTEXT_URL = "https://api.twitterapi.io/twitter/tweet/thread_context";
 export const DEFAULT_STATE_FILE_PATH = "var/state.json";
 export const NETWORK_FAILURE_KEY = "twitterapi_network";
@@ -167,7 +168,7 @@ export class DedupeStore {
   }
 
   emptyState() {
-    return { seen_tweets: {}, reported_events: {}, operational_failures: {} };
+    return { seen_tweets: {}, reported_events: {}, operational_failures: {}, checkpoints: {} };
   }
 
   load() {
@@ -201,6 +202,7 @@ export class DedupeStore {
       seen_tweets: seen,
       reported_events: objectOrEmpty(raw.reported_events),
       operational_failures: objectOrEmpty(raw.operational_failures),
+      checkpoints: objectOrEmpty(raw.checkpoints),
     };
   }
 
@@ -276,6 +278,16 @@ export class DedupeStore {
     const state = this.load();
     if (!Object.hasOwn(state.operational_failures, key)) return;
     delete state.operational_failures[key];
+    this.save(state);
+  }
+
+  checkpoint(key) {
+    return objectOrEmpty(this.load().checkpoints[String(key)]);
+  }
+
+  updateCheckpoint(key, patch) {
+    const state = this.load();
+    state.checkpoints[String(key)] = { ...objectOrEmpty(state.checkpoints[String(key)]), ...patch };
     this.save(state);
   }
 }
@@ -477,7 +489,50 @@ export async function fetchLastTweets({ handle, userId, includeReplies, maxPages
     });
     if (payloadStatus(payload) === "error") throw new Error(payloadMessage(payload) || "TwitterAPI.io returned error status");
     const pageTweets = tweetsFromPayload(payload);
-    pages.push(apiPageSummary(payload, pageTweets.length));
+    pages.push({ ...apiPageSummary(payload, pageTweets.length), source: "last_tweets" });
+    tweets.push(...pageTweets.filter((item) => item && typeof item === "object"));
+    if (!hasNextPage(payload)) break;
+    cursor = nextCursor(payload);
+    if (!cursor) break;
+  }
+  return { tweets, pages };
+}
+
+export function buildAdvancedSearchQuery({ handle, includeReplies, sinceTime, untilTime }) {
+  const parts = [
+    `from:${String(handle || "").replace(/^@/, "")}`,
+    `since_time:${Math.max(Number(sinceTime || 0), 0)}`,
+    `until_time:${Math.max(Number(untilTime || 0), 0)}`,
+  ];
+  if (!includeReplies) parts.push("-filter:replies");
+  return parts.join(" ");
+}
+
+export async function fetchAdvancedSearchTweets({ handle, includeReplies, sinceTime, untilTime, maxPages, timeout = 20 }) {
+  if (!handle) throw new Error("Advanced search fetch strategy requires --handle/TARGET_X_HANDLE");
+  const baseParams = {
+    query: buildAdvancedSearchQuery({ handle, includeReplies, sinceTime, untilTime }),
+    queryType: "Latest",
+  };
+
+  const tweets = [];
+  const pages = [];
+  let cursor = "";
+  for (let page = 0; page < Math.max(maxPages, 1); page += 1) {
+    const payload = await getJsonWithRetries(ADVANCED_SEARCH_URL, {
+      params: cursor ? { ...baseParams, cursor } : baseParams,
+      timeout,
+      operation: "advanced_search",
+    });
+    if (payloadStatus(payload) === "error") throw new Error(payloadMessage(payload) || "TwitterAPI.io advanced_search returned error status");
+    const pageTweets = tweetsFromPayload(payload);
+    pages.push({
+      ...apiPageSummary(payload, pageTweets.length),
+      source: "advanced_search",
+      since_time: sinceTime,
+      until_time: untilTime,
+      query: baseParams.query,
+    });
     tweets.push(...pageTweets.filter((item) => item && typeof item === "object"));
     if (!hasNextPage(payload)) break;
     cursor = nextCursor(payload);
@@ -554,6 +609,69 @@ function apiPageSummary(payload, tweetCount) {
     next_cursor_present: Boolean(nextCursor(payload)),
     response_keys: Object.keys(payload).sort(),
     data_keys: payload.data && typeof payload.data === "object" && !Array.isArray(payload.data) ? Object.keys(payload.data).sort() : [],
+  };
+}
+
+function monitorCheckpointKey(args) {
+  if (args.userId) return `user_id:${args.userId}`;
+  return `handle:${String(args.handle || "").replace(/^@/, "")}`;
+}
+
+export function incrementalWindowFromCheckpoint(checkpoint, { now, overlapSeconds, bootstrapLookbackSeconds }) {
+  const lastSuccessful = Number(checkpoint?.last_successful_check_at || 0);
+  const untilTime = Math.max(Number(now || 0), 0);
+  const sinceTime =
+    lastSuccessful > 0
+      ? Math.max(lastSuccessful - Math.max(overlapSeconds, 0), 0)
+      : Math.max(untilTime - Math.max(bootstrapLookbackSeconds, 1), 0);
+  return { sinceTime, untilTime, lastSuccessful };
+}
+
+function shouldUseAdvancedSearch(args) {
+  return args.fetchStrategy === "advanced_search" && Boolean(args.handle);
+}
+
+async function fetchTweetsForRun({ args, store }) {
+  if (shouldUseAdvancedSearch(args)) {
+    const checkpointKey = monitorCheckpointKey(args);
+    const window = incrementalWindowFromCheckpoint(store.checkpoint(checkpointKey), {
+      now: Math.floor(Date.now() / 1000),
+      overlapSeconds: args.incrementalOverlapSeconds,
+      bootstrapLookbackSeconds: args.incrementalBootstrapLookbackSeconds,
+    });
+    const fetched = await fetchAdvancedSearchTweets({
+      handle: args.handle,
+      includeReplies: args.includeReplies,
+      sinceTime: window.sinceTime,
+      untilTime: window.untilTime,
+      maxPages: Math.max(args.maxPages, 1),
+    });
+    return {
+      ...fetched,
+      fetchStrategy: "advanced_search",
+      checkpointKey,
+      checkpointPatch: {
+        last_successful_check_at: window.untilTime,
+        last_since_time: window.sinceTime,
+        last_fetch_strategy: "advanced_search",
+      },
+    };
+  }
+
+  const fetched = await fetchLastTweets({
+    handle: args.handle || null,
+    userId: args.userId || null,
+    includeReplies: args.includeReplies,
+    maxPages: Math.max(args.maxPages, 1),
+  });
+  return {
+    ...fetched,
+    fetchStrategy: "last_tweets",
+    checkpointKey: monitorCheckpointKey(args),
+    checkpointPatch: {
+      last_successful_check_at: Math.floor(Date.now() / 1000),
+      last_fetch_strategy: "last_tweets",
+    },
   };
 }
 
@@ -774,8 +892,11 @@ export function parseArgs(argv = process.argv.slice(2)) {
   const args = {
     handle: String(process.env.TARGET_X_HANDLE || "").trim(),
     userId: String(process.env.TARGET_X_USER_ID || "").trim(),
+    fetchStrategy: String(process.env.FETCH_STRATEGY || "advanced_search").trim(),
     includeReplies: envBool("INCLUDE_REPLIES", true),
-    maxPages: envInt("CHECK_ONCE_MAX_PAGES", 2),
+    maxPages: envInt("CHECK_ONCE_MAX_PAGES", 1),
+    incrementalOverlapSeconds: envInt("INCREMENTAL_OVERLAP_SECONDS", 300),
+    incrementalBootstrapLookbackSeconds: envInt("INCREMENTAL_BOOTSTRAP_LOOKBACK_SECONDS", 7200),
     hydrateReplyContext: envBool("HYDRATE_REPLY_CONTEXT", envBool("ENRICH_REPLY_CONTEXT", true)),
     threadContextMaxPages: envInt("THREAD_CONTEXT_MAX_PAGES", envInt("REPLY_CONTEXT_MAX_PAGES", 1)),
     threadContextMaxFetches: envInt("THREAD_CONTEXT_MAX_FETCHES", envInt("REPLY_CONTEXT_MAX_FETCHES", 12)),
@@ -805,9 +926,21 @@ export function parseArgs(argv = process.argv.slice(2)) {
       const [, value, nextIndex] = takeArg(argv, index);
       args.includeReplies = parseBoolArg(value);
       index = nextIndex;
+    } else if (current.startsWith("--fetch-strategy")) {
+      const [, value, nextIndex] = takeArg(argv, index);
+      args.fetchStrategy = String(value || "").trim();
+      index = nextIndex;
     } else if (current.startsWith("--max-pages")) {
       const [, value, nextIndex] = takeArg(argv, index);
       args.maxPages = Number.parseInt(value, 10);
+      index = nextIndex;
+    } else if (current.startsWith("--incremental-overlap-seconds")) {
+      const [, value, nextIndex] = takeArg(argv, index);
+      args.incrementalOverlapSeconds = Number.parseInt(value, 10);
+      index = nextIndex;
+    } else if (current.startsWith("--incremental-bootstrap-lookback-seconds")) {
+      const [, value, nextIndex] = takeArg(argv, index);
+      args.incrementalBootstrapLookbackSeconds = Number.parseInt(value, 10);
       index = nextIndex;
     } else if (current.startsWith("--hydrate-reply-context") || current.startsWith("--enrich-reply-context")) {
       const [, value, nextIndex] = takeArg(argv, index);
@@ -824,6 +957,10 @@ export function parseArgs(argv = process.argv.slice(2)) {
     } else {
       throw new Error(`Unknown argument: ${current}`);
     }
+  }
+
+  if (!["advanced_search", "last_tweets"].includes(args.fetchStrategy)) {
+    throw new Error(`FETCH_STRATEGY/--fetch-strategy must be advanced_search or last_tweets, got ${JSON.stringify(args.fetchStrategy)}`);
   }
 
   return args;
@@ -928,15 +1065,16 @@ export async function main() {
 
   let rawTweets = [];
   let apiPages = [];
+  let fetchStrategy = args.fetchStrategy;
+  let checkpointKey = monitorCheckpointKey(args);
+  let checkpointPatch = null;
   try {
-    const fetched = await fetchLastTweets({
-      handle: args.handle || null,
-      userId: args.userId || null,
-      includeReplies: args.includeReplies,
-      maxPages: Math.max(args.maxPages, 1),
-    });
+    const fetched = await fetchTweetsForRun({ args, store });
     rawTweets = fetched.tweets;
     apiPages = fetched.pages;
+    fetchStrategy = fetched.fetchStrategy;
+    checkpointKey = fetched.checkpointKey;
+    checkpointPatch = fetched.checkpointPatch;
     store.clearOperationalFailure(NETWORK_FAILURE_KEY);
   } catch (error) {
     const summary =
@@ -956,8 +1094,10 @@ export async function main() {
     const initialRun = store.count() === 0;
     if (args.primeState || (initialRun && !args.alertOnFirstRun && !args.dryRun)) {
       store.markManySeen(candidates.map((tweet) => tweet.id));
+      if (!args.dryRun && checkpointPatch) store.updateCheckpoint(checkpointKey, checkpointPatch);
       const summary = {
         status: initialRun ? "primed" : "state_updated",
+        fetch_strategy: fetchStrategy,
         fetched: candidates.length,
         marked_seen: candidates.length,
         api_pages: apiPages,
@@ -973,9 +1113,11 @@ export async function main() {
     }
 
     const { results, reviewItems, contextFetches } = await processCandidates(candidates, { store, args });
+    if (!args.dryRun && checkpointPatch) store.updateCheckpoint(checkpointKey, checkpointPatch);
     const summary = {
       status: "ok",
       target: args.userId || `@${args.handle}`,
+      fetch_strategy: fetchStrategy,
       fetched: candidates.length,
       new_items: reviewItems.length,
       api_pages: apiPages,
@@ -1004,6 +1146,7 @@ export async function main() {
 }
 
 function emptyFetchWarning(apiPages) {
+  if (apiPages.some((page) => page?.source === "advanced_search")) return null;
   if (!apiPages.length) return "TwitterAPI.io returned no pages; check target handle/user id and API response.";
   return "TwitterAPI.io call succeeded but no tweets were extracted. Inspect api_pages.response_keys/data_keys and try --user-id if the handle path returns an empty batch.";
 }

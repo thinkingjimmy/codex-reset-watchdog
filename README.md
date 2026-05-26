@@ -11,6 +11,7 @@ A zero-dependency Codex skill repo for monitoring [`@thsottiaux`](https://x.com/
 - Gives the LLM the full new batch: every unseen tweet/reply is reviewed, reducing rule prefilter misses.
 - Stays quiet when nothing matters: no reset/refill/restored-allowance signal means no finding.
 - Avoids repeat noise: the same tweet/reply is handled once, while future new posts remain eligible.
+- Saves API credits: normal checks use Advanced Search with a `since_time/until_time` incremental window instead of repeatedly returning the latest 40 tweets.
 - Handles network blips calmly: transient DNS/network failures do not immediately spam Triage.
 - Keeps one notification surface: findings appear only in Codex Automation/Triage, not external channels.
 
@@ -129,12 +130,33 @@ STATE_FILE_PATH=var/state.json
 - `api_pages`: per-page API diagnostics, including response keys, status, message, and extracted tweet count.
 - `api_warning`: present when the API succeeds but no tweet/reply can be extracted, useful for diagnosing target account, user id, or response-shape issues.
 - `state`: actual state file path, requested path, fallback status, and related warnings.
+- `fetch_strategy`: fetch mode, defaulting to `advanced_search`; set `last_tweets` only as a fallback.
 - `llm_instruction`: short instruction for the Automation LLM.
 - `reply_context_fetches`: number of TwitterAPI.io thread-context lookups.
 - `operational_error`: present for transient/network/runtime failures; report only when instructed by the Automation prompt.
 - `results`: per-tweet handling details such as `queued_for_llm`, `already_seen`, or `ignored_repost`.
 
 Transient DNS failures for `api.twitterapi.io` are retried inside the same run. If all retries fail, the script exits cleanly with `status: "transient_network_error"` so one-off network blips do not spam Triage.
+
+## API Credits And Incremental Fetching
+
+TwitterAPI.io's own docs warn that repeatedly calling `last_tweets` for frequent single-account monitoring can cost a lot because each page returns up to 20 tweets. This skill now defaults to `advanced_search`:
+
+```env
+FETCH_STRATEGY=advanced_search
+INCREMENTAL_OVERLAP_SECONDS=300
+INCREMENTAL_BOOTSTRAP_LOOKBACK_SECONDS=7200
+CHECK_ONCE_MAX_PAGES=1
+```
+
+Runtime behavior:
+
+- The first prime run establishes a checkpoint.
+- Scheduled runs search only the time window since the last successful check.
+- The window overlaps by `INCREMENTAL_OVERLAP_SECONDS` to avoid clock-skew misses.
+- If there are no new tweets/replies, the run usually pays for one empty window search instead of repeatedly returning 20-40 old tweets.
+
+Set `FETCH_STRATEGY=last_tweets` only as a compatibility fallback. It is simpler but spends more credits.
 
 ## Permission Guidance
 
@@ -190,6 +212,7 @@ If `network_ok=true` but the normal check still fails, inspect the API key, targ
 - TwitterAPI.io docs: <https://docs.twitterapi.io/introduction>
 - TwitterAPI.io authentication: <https://docs.twitterapi.io/authentication>
 - TwitterAPI.io `last_tweets`: <https://docs.twitterapi.io/api-reference/endpoint/get_user_last_tweets>
+- TwitterAPI.io `advanced_search`: <https://docs.twitterapi.io/api-reference/endpoint/tweet_advanced_search>
 - TwitterAPI.io `thread_context`: <https://docs.twitterapi.io/api-reference/endpoint/get_tweet_thread_context>
 - Codex Skills docs: <https://developers.openai.com/codex/skills>
 - Codex Automations docs: <https://developers.openai.com/codex/app/automations>

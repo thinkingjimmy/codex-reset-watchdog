@@ -11,6 +11,8 @@ The TwitterAPI.io key should be in the local `env` or `.env` file as `TWITTERAPI
 
 Cadence: every 30 minutes, or hourly if lower cost/noise is preferred.
 
+Fetch strategy: use `FETCH_STRATEGY=advanced_search` by default. It searches the incremental `since_time/until_time` window stored in state. Use `last_tweets` only as a compatibility fallback because it repeatedly returns recent old tweets and spends more credits.
+
 Permissions: use the project `.codex/config.toml` profile `codex-reset-watchdog-net`. This task needs write access to the current workspace and outbound HTTPS to `api.twitterapi.io`; it does not require full filesystem access.
 
 If Codex asks whether to trust the project configuration, inspect `.codex/config.toml` and trust it only if it matches the narrow `codex-reset-watchdog-net` profile.
@@ -56,6 +58,7 @@ State/lifecycle:
 - The Automation should continue running after a finding. Do not pause or disable it after a reset alert.
 - The script marks seen tweet IDs in the state file after emitting them, so the same tweet should not be reviewed again.
 - A future tweet/reply with a new tweet ID should be treated as a new item and can produce a new finding.
+- Incremental search checkpoints are stored in state. Normal no-op runs should not repeatedly fetch 20-40 old tweets.
 - Do not run `node scripts/self_test.mjs`, `--prime-state`, or `--dry-run` during ordinary scheduled runs. Those are setup/pre-enable checks only.
 - Normal no-op runs are expected to fetch recent tweets and return `new_items=0` after state has been primed.
 - Transient TwitterAPI.io DNS/network failures are retried inside the script. One-off failures should not create noisy findings.

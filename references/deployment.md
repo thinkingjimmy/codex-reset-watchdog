@@ -93,6 +93,19 @@ node scripts/check_once.mjs --include-replies true --hydrate-reply-context true 
 
 Recommended cadence: every 30-60 minutes.
 
+## Credit control
+
+Default scheduled monitoring uses Advanced Search with an incremental time window:
+
+```env
+FETCH_STRATEGY=advanced_search
+INCREMENTAL_OVERLAP_SECONDS=300
+INCREMENTAL_BOOTSTRAP_LOOKBACK_SECONDS=7200
+CHECK_ONCE_MAX_PAGES=1
+```
+
+This is deliberate. TwitterAPI.io documents that `last_tweets` returns up to 20 tweets per page and is costly for frequent single-account monitoring. The advanced-search strategy stores a checkpoint in `STATE_FILE_PATH` and searches only the window since the last successful run. Keep `FETCH_STRATEGY=last_tweets` only as a compatibility fallback.
+
 ## Codex permission profile
 
 The checked-in `.codex/config.toml` file defines the recommended project permission profile:
@@ -136,6 +149,8 @@ STATE_FILE_PATH=var/state.json
 ```
 
 `var/` is ignored by git and writable in Codex sandboxed runs. If the file is deleted, the script loses dedupe memory and may reprocess old tweets. If you set a custom home-directory path and Codex cannot write it, the script falls back to `var/state.json` and reports that in the `state` field.
+
+State contains both `seen_tweets` for dedupe and `checkpoints` for incremental search windows.
 
 ## Lifecycle
 

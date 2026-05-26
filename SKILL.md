@@ -38,16 +38,17 @@ To get a TwitterAPI.io key, direct the user to sign in at <https://twitterapi.io
 ## Core behavior
 
 1. Use `scripts/check_once.mjs` as the runtime entrypoint for scheduled monitoring.
-2. Include replies by default. Reset announcements may appear as replies rather than top-level tweets, so `INCLUDE_REPLIES=true` is the default.
-3. For new replies, fetch real thread context by default. This catches terse replies such as “yes, later today” when the parent tweet asks about a Codex usage reset.
-4. Emit **every new unseen tweet/reply** as a `review_items` entry. Do not pre-filter the batch with deterministic reset rules.
-5. Let the Codex Automation LLM judge announcement intent. Alert when the tweet/reply says or strongly implies that Codex usage, quota, rate limits, weekly limits, caps, credits, allowance, or capacity will be reset/refilled/restored, or were just reset as remediation.
-6. The LLM should avoid false positives from non-quota meanings of reset: git reset, branch reset, cache reset, password reset, environment reset, session reset, config reset, reset button, reset command, or negated wording like “not going to reset”.
-7. Mark each emitted tweet ID as seen in the JSON state file so the same tweet/reply is not sent to the LLM every run.
-8. Retry transient TwitterAPI.io DNS/network failures inside the same run. If all retries fail, emit JSON `status=transient_network_error` and report on the threshold failure, then only every `OPERATIONAL_ERROR_REPORT_EVERY_FAILURES` failures while the outage continues.
-9. When repeated `fetch failed` errors happen, run `node scripts/check_once.mjs --diagnose-network --json` from the same Automation working directory. If DNS or HTTPS reachability fails, treat it as a runtime network issue and keep the Automation active.
-10. On the first run, default to priming state rather than reviewing old tweets. Set `ALERT_ON_FIRST_RUN=true` only when the user explicitly wants a historical scan.
-11. For findings, the Automation LLM should include tweet text, reply context when used, author handle, tweet URL, creation time, event key, and a concise rationale.
+2. Use cost-aware incremental fetching by default: `FETCH_STRATEGY=advanced_search` with `since_time/until_time` checkpoints. Keep `last_tweets` only as a compatibility fallback.
+3. Include replies by default. Reset announcements may appear as replies rather than top-level tweets, so `INCLUDE_REPLIES=true` is the default.
+4. For new replies, fetch real thread context by default. This catches terse replies such as “yes, later today” when the parent tweet asks about a Codex usage reset.
+5. Emit **every new unseen tweet/reply** as a `review_items` entry. Do not pre-filter the batch with deterministic reset rules.
+6. Let the Codex Automation LLM judge announcement intent. Alert when the tweet/reply says or strongly implies that Codex usage, quota, rate limits, weekly limits, caps, credits, allowance, or capacity will be reset/refilled/restored, or were just reset as remediation.
+7. The LLM should avoid false positives from non-quota meanings of reset: git reset, branch reset, cache reset, password reset, environment reset, session reset, config reset, reset button, reset command, or negated wording like “not going to reset”.
+8. Mark each emitted tweet ID as seen in the JSON state file so the same tweet/reply is not sent to the LLM every run.
+9. Retry transient TwitterAPI.io DNS/network failures inside the same run. If all retries fail, emit JSON `status=transient_network_error` and report on the threshold failure, then only every `OPERATIONAL_ERROR_REPORT_EVERY_FAILURES` failures while the outage continues.
+10. When repeated `fetch failed` errors happen, run `node scripts/check_once.mjs --diagnose-network --json` from the same Automation working directory. If DNS or HTTPS reachability fails, treat it as a runtime network issue and keep the Automation active.
+11. On the first run, default to priming state rather than reviewing old tweets. Set `ALERT_ON_FIRST_RUN=true` only when the user explicitly wants a historical scan.
+12. For findings, the Automation LLM should include tweet text, reply context when used, author handle, tweet URL, creation time, event key, and a concise rationale.
 
 ## Long-running lifecycle
 
@@ -56,6 +57,7 @@ The Automation is meant to keep running indefinitely. A successful reset alert d
 State is split into two practical layers:
 
 - `seen_tweets`: every emitted new tweet/reply is marked seen, so the same tweet is not reviewed again on the next run.
+- `checkpoints`: last successful incremental search time window per target, so no-op runs do not repeatedly fetch old pages.
 - `operational_failures`: transient TwitterAPI.io network failures are counted so one-off DNS failures can be ignored while repeated failures still surface.
 
 This means:
@@ -77,7 +79,7 @@ Use a persistent `STATE_FILE_PATH`. The default is `var/state.json` inside the p
 - `README.md`: English usage tutorial with links.
 - `README.zh-CN.md`: Chinese usage tutorial with links.
 - `scripts/README.md`: runtime module map for entrypoints and boundaries.
-- `scripts/check_once.mjs`: zero-dependency Node TwitterAPI.io `last_tweets` check; the recommended entrypoint for Codex Automation.
+- `scripts/check_once.mjs`: zero-dependency Node TwitterAPI.io incremental check; the recommended entrypoint for Codex Automation.
 - `scripts/self_test.mjs`: local deterministic tests with no network calls.
 - `references/automation-prompt.md`: durable Codex Automation prompt to paste into the app.
 - `references/llm-judge-rubric.md`: rubric for judging `review_items` inside Codex Automation.
@@ -104,6 +106,8 @@ Keep these defaults unless you need to change them:
 ```env
 TARGET_X_HANDLE=thsottiaux
 STATE_FILE_PATH=var/state.json
+FETCH_STRATEGY=advanced_search
+INCREMENTAL_OVERLAP_SECONDS=300
 INCLUDE_REPLIES=true
 HYDRATE_REPLY_CONTEXT=true
 ```
@@ -189,6 +193,7 @@ Do not run `self_test`, `--prime-state`, or `--dry-run` during ordinary schedule
 - `review_items`: structured new tweets/replies with text, reply context, URL, author, event key, created time, and reply metadata.
 - `api_pages`: per-page API diagnostics with response keys, status/message, and extracted tweet count.
 - `api_warning`: present when the API succeeds but no tweet/reply can be extracted.
+- `fetch_strategy`: `advanced_search` by default, `last_tweets` only when explicitly configured.
 - `state`: actual state file path, requested path, fallback status, and related warnings.
 - `llm_instruction`: short instruction for judging this batch.
 - `reply_context_fetches`: number of thread context API lookups used.
@@ -220,6 +225,7 @@ Suppress examples:
 - Do not add external notification channels unless the user explicitly asks for them later.
 - Keep `INCLUDE_REPLIES=true` and `HYDRATE_REPLY_CONTEXT=true` unless API cost becomes a problem.
 - Keep the script as a fact collector, not a semantic classifier. The LLM should be the judge.
+- Keep `FETCH_STRATEGY=advanced_search` for scheduled monitoring. `last_tweets` is more expensive because it repeatedly returns recent old tweets.
 - Keep `STATE_FILE_PATH` persistent across automation runs. Prefer the default `var/state.json` unless the Automation environment can write the custom path.
 - Use `--diagnose-network --json` for repeated `fetch failed` errors. It separates network reachability from API/auth/content issues.
 - Do not recommend full access as the default fix. The minimum needed permissions are workspace write plus outbound HTTPS to `api.twitterapi.io`.

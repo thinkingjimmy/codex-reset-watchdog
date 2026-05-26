@@ -15,9 +15,11 @@ import {
   DEFAULT_STATE_FILE_PATH,
   DedupeStore,
   attachThreadContext,
+  buildAdvancedSearchQuery,
   buildReviewItem,
   eventKeyForTweet,
   extractTweets,
+  incrementalWindowFromCheckpoint,
   parseArgs,
   processCandidates,
   shouldReportOperationalFailure,
@@ -53,6 +55,18 @@ async function main() {
     assert.equal(eventKeyForTweet(candidates[2]), "150");
     assert.equal(tweetsFromPayload({ data: { tweets: [high] } }).length, 1);
     assert.equal(tweetsFromPayload({ result: { items: [falsePositive] } }).length, 1);
+    assert.equal(
+      buildAdvancedSearchQuery({ handle: "@target", includeReplies: true, sinceTime: 10, untilTime: 20 }),
+      "from:target since_time:10 until_time:20",
+    );
+    assert.equal(
+      buildAdvancedSearchQuery({ handle: "target", includeReplies: false, sinceTime: 10, untilTime: 20 }),
+      "from:target since_time:10 until_time:20 -filter:replies",
+    );
+    assert.deepEqual(
+      incrementalWindowFromCheckpoint({ last_successful_check_at: 1000 }, { now: 2000, overlapSeconds: 300, bootstrapLookbackSeconds: 7200 }),
+      { sinceTime: 700, untilTime: 2000, lastSuccessful: 1000 },
+    );
 
     const replyWithContext = attachThreadContext(candidates[2], [
       { id: "150", text: "Will you reset Codex usage limits for affected users?", author: { userName: "someone" } },
@@ -113,6 +127,7 @@ async function main() {
     assert.equal(shouldReportOperationalFailure(4, 3, 24), false);
     assert.equal(shouldReportOperationalFailure(27, 3, 24), true);
     assert.equal(parseArgs(["--diagnose-network"]).diagnoseNetwork, true);
+    assert.equal(parseArgs(["--fetch-strategy", "last_tweets"]).fetchStrategy, "last_tweets");
 
     console.log("self_test passed");
   } finally {

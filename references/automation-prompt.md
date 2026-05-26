@@ -44,7 +44,7 @@ State/lifecycle:
 - The script marks seen tweet IDs in the state file after emitting them, so the same tweet should not be reviewed again.
 - A future tweet/reply with a new tweet ID should be treated as a new item and can produce a new finding.
 - Transient TwitterAPI.io DNS/network failures are retried inside the script. One-off failures should not create noisy findings.
-- Keep `STATE_FILE_PATH` persistent across runs, preferably `~/.cache/codex-reset-watchdog/state.json`.
+- Keep `STATE_FILE_PATH` persistent across runs. Prefer the default `var/state.json` because it is writable in Codex sandboxed runs.
 ```
 
 Before enabling the automation, prime the local state once:
@@ -59,3 +59,5 @@ Then test once without state side effects:
 ```bash
 node scripts/check_once.mjs --include-replies true --hydrate-reply-context true --dry-run --json
 ```
+
+Important: dry-run validates API reading and JSON parsing, but it does not prove the Automation can write state. A real Automation run writes `seen_tweets` and `operational_failures`; keep `STATE_FILE_PATH=var/state.json` unless the configured environment can write another path.

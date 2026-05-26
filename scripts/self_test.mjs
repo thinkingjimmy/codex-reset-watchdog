@@ -12,6 +12,7 @@ import os from "node:os";
 import path from "node:path";
 
 import {
+  DEFAULT_STATE_FILE_PATH,
   DedupeStore,
   attachThreadContext,
   buildReviewItem,
@@ -95,6 +96,14 @@ async function main() {
     assert.equal(failure.count, 1);
     store.clearOperationalFailure("twitterapi_network");
     assert.equal(store.load().operational_failures.twitterapi_network, undefined);
+
+    const blockedParent = path.join(tmp, "not-a-directory");
+    fs.writeFileSync(blockedParent, "file blocks directory creation", "utf8");
+    const fallbackStore = new DedupeStore(path.join(blockedParent, "state.json"));
+    fallbackStore.fallbackPath = path.join(tmp, DEFAULT_STATE_FILE_PATH);
+    fallbackStore.markSeen("fallback-works");
+    assert.equal(fallbackStore.info().fallback_used, true);
+    assert.equal(fallbackStore.isSeen("fallback-works"), true);
 
     console.log("self_test passed");
   } finally {

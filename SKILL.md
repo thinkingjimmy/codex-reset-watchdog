@@ -60,7 +60,7 @@ This means:
 - if a genuinely new reset announcement appears later with a new tweet ID, it is eligible for a new LLM review and finding;
 - if the same thread later gets a “done/reset complete” update as a new reply, it can still be reviewed once.
 
-Use a persistent `STATE_FILE_PATH`, preferably outside a repo worktree, such as `~/.cache/codex-reset-watchdog/state.json`.
+Use a persistent `STATE_FILE_PATH`. The default is `var/state.json` inside the project because Codex sandboxed runs can write there and `var/` is git-ignored. If a user-configured home-directory state path is not writable, the script falls back to `var/state.json` and reports that in the output `state` field.
 
 ## Files in this skill
 
@@ -95,7 +95,7 @@ Keep these defaults unless you need to change them:
 
 ```env
 TARGET_X_HANDLE=thsottiaux
-STATE_FILE_PATH=~/.cache/codex-reset-watchdog/state.json
+STATE_FILE_PATH=var/state.json
 INCLUDE_REPLIES=true
 HYDRATE_REPLY_CONTEXT=true
 ```
@@ -119,6 +119,8 @@ node scripts/check_once.mjs --prime-state --json
 ```bash
 node scripts/check_once.mjs --include-replies true --hydrate-reply-context true --dry-run --json
 ```
+
+Dry-run validates API reading and JSON parsing, but it does not prove state writes. A real Automation run writes `seen_tweets` and `operational_failures`; use `STATE_FILE_PATH=var/state.json` unless the Automation environment can write the custom path.
 
 ### 5. Create a Codex Automation
 
@@ -148,6 +150,7 @@ Then it should:
 - `review_items`: structured new tweets/replies with text, reply context, URL, author, event key, created time, and reply metadata.
 - `api_pages`: per-page API diagnostics with response keys, status/message, and extracted tweet count.
 - `api_warning`: present when the API succeeds but no tweet/reply can be extracted.
+- `state`: actual state file path, requested path, fallback status, and related warnings.
 - `llm_instruction`: short instruction for judging this batch.
 - `reply_context_fetches`: number of thread context API lookups used.
 - `operational_error`: structured transient/runtime error data; report according to the Automation prompt.
@@ -178,6 +181,6 @@ Suppress examples:
 - Do not add external notification channels unless the user explicitly asks for them later.
 - Keep `INCLUDE_REPLIES=true` and `HYDRATE_REPLY_CONTEXT=true` unless API cost becomes a problem.
 - Keep the script as a fact collector, not a semantic classifier. The LLM should be the judge.
-- Keep `STATE_FILE_PATH` persistent across automation runs.
+- Keep `STATE_FILE_PATH` persistent across automation runs. Prefer the default `var/state.json` unless the Automation environment can write the custom path.
 - Keep the real API key only in `env` or `.env`; `.gitignore` prevents committing it, but the user is still responsible for not sharing it.
 - If the target account becomes very active, reduce `CHECK_ONCE_MAX_PAGES` or `THREAD_CONTEXT_MAX_FETCHES` before disabling reply context support.

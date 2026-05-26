@@ -107,8 +107,10 @@ Codex 会先验证脚本能跑，再把当前已有 tweets/replies 标记为基�
 默认状态文件位置：
 
 ```env
-STATE_FILE_PATH=~/.cache/codex-reset-watchdog/state.json
+STATE_FILE_PATH=var/state.json
 ```
+
+`var/` 已被 git 忽略，并且在 Codex 沙箱运行时可写。如果你自己配置了 home 目录下的路径而 Codex 没有权限写入，脚本会自动 fallback 到 `var/state.json`，并在输出 JSON 的 `state` 字段里说明。
 
 ## 输出格式
 
@@ -120,6 +122,7 @@ STATE_FILE_PATH=~/.cache/codex-reset-watchdog/state.json
 - `review_items`：所有新的未见 tweet/reply，包含正文、URL、作者、回复元数据、event key 和回复上下文。
 - `api_pages`：每一页 API 返回的摘要，包括返回键、状态、message 和提取到的 tweet 数量。
 - `api_warning`：API 成功但没有提取到任何 tweet/reply 时出现，用来诊断目标账号、user id 或返回结构问题。
+- `state`：实际使用的状态文件路径、用户请求的路径、是否发生 fallback，以及相关 warning。
 - `llm_instruction`：给 Automation LLM 的简短判断指令。
 - `reply_context_fetches`：本次拉取 thread context 的次数。
 - `operational_error`：网络或运行错误；是否报警由 Automation prompt 决定。

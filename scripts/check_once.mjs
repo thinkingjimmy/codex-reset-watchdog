@@ -14,7 +14,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 export const LAST_TWEETS_URL = "https://api.twitterapi.io/twitter/user/last_tweets";
 export const THREAD_CONTEXT_URL = "https://api.twitterapi.io/twitter/tweet/thread_context";
-export const DEFAULT_STATE_FILE_PATH = "~/.cache/codex-reset-watchdog/state.json";
+export const DEFAULT_STATE_FILE_PATH = "var/state.json";
 export const NETWORK_FAILURE_KEY = "twitterapi_network";
 
 const API_KEY_PLACEHOLDERS = new Set([
@@ -114,6 +114,11 @@ export function expandHome(value) {
   return text;
 }
 
+function normalizeStatePath(value) {
+  const expanded = expandHome(value || DEFAULT_STATE_FILE_PATH);
+  return path.isAbsolute(expanded) ? expanded : path.resolve(repoRoot(), expanded);
+}
+
 function readFirstNonemptyLine(filePath) {
   if (!filePath) return "";
   const expanded = expandHome(filePath);
@@ -153,7 +158,11 @@ export function prettyJson(value) {
 
 export class DedupeStore {
   constructor(filePath = process.env.STATE_FILE_PATH || DEFAULT_STATE_FILE_PATH) {
-    this.path = expandHome(filePath);
+    this.requestedPath = filePath;
+    this.path = normalizeStatePath(filePath);
+    this.fallbackPath = normalizeStatePath(DEFAULT_STATE_FILE_PATH);
+    this.fallbackUsed = false;
+    this.warnings = [];
   }
 
   emptyState() {
@@ -161,8 +170,28 @@ export class DedupeStore {
   }
 
   load() {
-    if (!fs.existsSync(this.path)) return this.emptyState();
-    const raw = JSON.parse(fs.readFileSync(this.path, "utf8"));
+    try {
+      return this.readStateAt(this.path);
+    } catch (error) {
+      if (!this.canFallback(error)) throw error;
+      this.activateFallback(error);
+      return this.readStateAt(this.path);
+    }
+  }
+
+  save(state) {
+    try {
+      this.writeStateAt(this.path, state);
+    } catch (error) {
+      if (!this.canFallback(error)) throw error;
+      this.activateFallback(error);
+      this.writeStateAt(this.path, state);
+    }
+  }
+
+  readStateAt(filePath) {
+    if (!fs.existsSync(filePath)) return this.emptyState();
+    const raw = JSON.parse(fs.readFileSync(filePath, "utf8"));
     if (!raw || typeof raw !== "object" || Array.isArray(raw)) return this.emptyState();
     const seen = Array.isArray(raw.seen_tweets)
       ? Object.fromEntries(raw.seen_tweets.map((tweetId) => [String(tweetId), 0]))
@@ -174,15 +203,36 @@ export class DedupeStore {
     };
   }
 
-  save(state) {
-    fs.mkdirSync(path.dirname(this.path), { recursive: true });
-    const tempPath = path.join(path.dirname(this.path), `.${path.basename(this.path)}.${process.pid}.tmp`);
+  writeStateAt(filePath, state) {
+    fs.mkdirSync(path.dirname(filePath), { recursive: true });
+    const tempPath = path.join(path.dirname(filePath), `.${path.basename(filePath)}.${process.pid}.tmp`);
     try {
       fs.writeFileSync(tempPath, `${prettyJson(state)}\n`, "utf8");
-      fs.renameSync(tempPath, this.path);
+      fs.renameSync(tempPath, filePath);
     } finally {
       if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
     }
+  }
+
+  canFallback(error) {
+    return this.path !== this.fallbackPath && ["EACCES", "EEXIST", "ENOENT", "ENOTDIR", "EPERM", "EROFS"].includes(error?.code);
+  }
+
+  activateFallback(error) {
+    this.fallbackUsed = true;
+    this.warnings.push(
+      `State path ${this.path} is not writable/readable (${error.code}); using ${this.fallbackPath} instead.`,
+    );
+    this.path = this.fallbackPath;
+  }
+
+  info() {
+    return {
+      path: this.path,
+      requested_path: String(this.requestedPath),
+      fallback_used: this.fallbackUsed,
+      warnings: this.warnings,
+    };
   }
 
   count() {
@@ -710,6 +760,7 @@ function transientNetworkSummary(error, store, args) {
     review_items: [],
     notification_surface: "codex_automation_triage",
     dry_run: Boolean(args.dryRun),
+    state: store.info(),
     operational_error: {
       ...error.toSummary(),
       consecutive_failures: Number(failure.count),
@@ -723,7 +774,7 @@ function transientNetworkSummary(error, store, args) {
   };
 }
 
-function runtimeErrorSummary(error, args) {
+function runtimeErrorSummary(error, args, store = null) {
   return {
     status: "error",
     target: args.userId || `@${args.handle}`,
@@ -734,6 +785,7 @@ function runtimeErrorSummary(error, args) {
     review_items: [],
     notification_surface: "codex_automation_triage",
     dry_run: Boolean(args.dryRun),
+    state: store?.info?.() || null,
     operational_error: {
       type: error?.name || "Error",
       detail: sanitizeException(error),
@@ -779,7 +831,7 @@ export async function main() {
     const summary =
       error instanceof TwitterAPITransientError
         ? transientNetworkSummary(error, store, args)
-        : runtimeErrorSummary(error, args);
+        : runtimeErrorSummary(error, args, store);
     if (args.json) console.log(prettyJson(summary));
     else console.log(summary.operational_error?.message || summary.operational_error?.detail || "Runtime error");
     if (error instanceof TwitterAPITransientError) {
@@ -799,6 +851,7 @@ export async function main() {
         marked_seen: candidates.length,
         api_pages: apiPages,
         api_warning: candidates.length === 0 ? emptyFetchWarning(apiPages) : null,
+        state: store.info(),
         review_count: 0,
         has_review_items: false,
         review_items: [],
@@ -816,6 +869,7 @@ export async function main() {
       new_items: reviewItems.length,
       api_pages: apiPages,
       api_warning: candidates.length === 0 ? emptyFetchWarning(apiPages) : null,
+      state: store.info(),
       reply_context_fetches: contextFetches,
       review_count: reviewItems.length,
       has_review_items: reviewItems.length > 0,
@@ -831,7 +885,7 @@ export async function main() {
     else console.log(`Checked ${summary.target}: ${summary.new_items} new tweets/replies queued for LLM review.`);
     return 0;
   } catch (error) {
-    const summary = runtimeErrorSummary(error, args);
+    const summary = runtimeErrorSummary(error, args, store);
     if (args.json) console.log(prettyJson(summary));
     else console.log(summary.operational_error.detail);
     return 1;

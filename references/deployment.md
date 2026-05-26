@@ -74,6 +74,8 @@ node scripts/check_once.mjs --prime-state --json
 
 This prevents old tweets/replies from becoming new Codex Triage findings.
 
+Dry-run checks are useful for API reading and JSON parsing, but they do not prove state writes. The scheduled Automation writes `seen_tweets` and `operational_failures`, so keep the default `STATE_FILE_PATH=var/state.json` in sandboxed Codex runs.
+
 ## Runtime command
 
 Codex Automation should run:
@@ -86,13 +88,13 @@ Recommended cadence: every 30-60 minutes.
 
 ## State path
 
-Use a persistent state file path:
+Use the default persistent state file path:
 
 ```env
-STATE_FILE_PATH=~/.cache/codex-reset-watchdog/state.json
+STATE_FILE_PATH=var/state.json
 ```
 
-Do not put the state file inside a disposable worktree. If the file is deleted, the script loses dedupe memory and may reprocess old tweets.
+`var/` is ignored by git and writable in Codex sandboxed runs. If the file is deleted, the script loses dedupe memory and may reprocess old tweets. If you set a custom home-directory path and Codex cannot write it, the script falls back to `var/state.json` and reports that in the `state` field.
 
 ## Lifecycle
 

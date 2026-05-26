@@ -102,11 +102,13 @@ Codex will verify the script, prime the current tweets/replies as the baseline, 
 - `operational_failures` tracks consecutive transient TwitterAPI.io network failures.
 - Future reset posts with a new tweet ID can still be reviewed and reported.
 
-Keep the state file outside disposable worktrees:
+Default state file location:
 
 ```env
-STATE_FILE_PATH=~/.cache/codex-reset-watchdog/state.json
+STATE_FILE_PATH=var/state.json
 ```
+
+`var/` is ignored by git and writable in Codex sandboxed runs. If you set a custom home-directory path and Codex cannot write it, the script falls back to `var/state.json` and reports that in the `state` field.
 
 ## Output Contract
 
@@ -118,6 +120,7 @@ STATE_FILE_PATH=~/.cache/codex-reset-watchdog/state.json
 - `review_items`: all new unseen tweets/replies with text, URL, author, reply metadata, event key, and fetched reply context.
 - `api_pages`: per-page API diagnostics, including response keys, status, message, and extracted tweet count.
 - `api_warning`: present when the API succeeds but no tweet/reply can be extracted, useful for diagnosing target account, user id, or response-shape issues.
+- `state`: actual state file path, requested path, fallback status, and related warnings.
 - `llm_instruction`: short instruction for the Automation LLM.
 - `reply_context_fetches`: number of TwitterAPI.io thread-context lookups.
 - `operational_error`: present for transient/network/runtime failures; report only when instructed by the Automation prompt.

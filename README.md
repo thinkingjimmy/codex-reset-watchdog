@@ -20,6 +20,11 @@ The repo is shaped as a single Codex skill directory: `SKILL.md` at the root, op
 
 ```text
 codex-reset-watchdog/
+  .codex/
+    config.toml                   # Minimal Codex permission profile, replacing full access
+    README.md                     # Codex configuration notes
+    rules/
+      codex-reset-watchdog.rules  # Command-level network fallback for older sandbox mode
   SKILL.md                         # Skill metadata and operating instructions
   README.md                        # English setup guide
   README.zh-CN.md                  # Chinese setup guide
@@ -84,6 +89,7 @@ Before creating it:
 Then create an Automation that runs every 1 hour:
 - Automation prompt: use the full contents of references/automation-prompt.md directly; do not improvise or rewrite it
 - working directory: the current codex-reset-watchdog folder
+- permissions: use the project .codex/config.toml profile, codex-reset-watchdog-net; do not enable full access for this script
 - command: node scripts/check_once.mjs --include-replies true --hydrate-reply-context true --json
 - read review_items from the JSON output on every run
 - judge them with references/llm-judge-rubric.md
@@ -93,6 +99,8 @@ Then create an Automation that runs every 1 hour:
 ```
 
 Codex will verify the script, prime the current tweets/replies as the baseline, then create the scheduled Automation using the full contents of [`references/automation-prompt.md`](references/automation-prompt.md). The LLM judging rubric lives in [`references/llm-judge-rubric.md`](references/llm-judge-rubric.md). These files are the source of truth; do not let Codex invent a different runtime prompt.
+
+After enablement, ordinary scheduled runs should execute only the main command. `self_test`, `--prime-state`, and `--dry-run` are setup/pre-enable checks, not every-run work. Once state has been primed, repeated `status=ok`, `fetched=40`, `new_items=0`, and `review_count=0` output is a normal no-op check and should not be written to automation memory.
 
 ## State And Dedupe
 
@@ -127,6 +135,54 @@ STATE_FILE_PATH=var/state.json
 - `results`: per-tweet handling details such as `queued_for_llm`, `already_seen`, or `ignored_repost`.
 
 Transient DNS failures for `api.twitterapi.io` are retried inside the same run. If all retries fail, the script exits cleanly with `status: "transient_network_error"` so one-off network blips do not spam Triage.
+
+## Permission Guidance
+
+This skill has a small permission footprint:
+
+- read `env` / `.env` in the current project;
+- write `var/state.json` in the current project;
+- make HTTPS requests to `https://api.twitterapi.io`.
+
+The repo includes the recommended configuration in `.codex/config.toml`. It defines `codex-reset-watchdog-net`, which allows workspace writes and only the `api.twitterapi.io` network destination:
+
+```toml
+default_permissions = "codex-reset-watchdog-net"
+
+[permissions.codex-reset-watchdog-net.filesystem]
+":minimal" = "read"
+
+[permissions.codex-reset-watchdog-net.filesystem.":workspace_roots"]
+"." = "write"
+
+[permissions.codex-reset-watchdog-net.network]
+enabled = true
+
+[permissions.codex-reset-watchdog-net.network.domains]
+"api.twitterapi.io" = "allow"
+```
+
+The first time you open this project in Codex, if Codex asks whether to trust the project configuration, inspect `.codex/config.toml` and trust it only after confirming it contains the narrow profile above. If the permissions selector offers `Custom (config.toml)`, select it.
+
+Important: permission profiles do not compose with the older `sandbox_mode` settings. If the current Codex runtime still uses the older `workspace-write` sandbox, `default_permissions` may not apply and local `node fetch` can still be blocked. For that compatibility path, the repo includes `.codex/rules/codex-reset-watchdog.rules`, which allows only `node scripts/check_once.mjs` to run outside the sandbox; this is still narrower than enabling full access for the whole Automation.
+
+If you already created an Automation, make sure its working directory also has the latest `.codex/` directory. Updating this repo does not update an older test copy automatically; either sync the latest `.codex/` into the Automation working directory or recreate the Automation from the updated repo.
+
+Do not enable full access just for this skill. Full access expands filesystem read/write scope beyond what the script needs. The best practice is to use the project-level profile above; use full access only as a temporary fallback when the current Codex version cannot apply project permissions and the user explicitly accepts the risk.
+
+Some skills can reach the network without full access because they may use built-in Codex tools, browser plugins, MCP connectors, or hosted capabilities. Those requests do not necessarily run through local `node fetch`. This project uses a plain Node CLI, so it is governed by the current shell/Automation sandbox network permissions.
+
+## Network Diagnostics
+
+If Automation returns `status: "transient_network_error"`, `root_cause: "connection_error"`, or `detail: "fetch failed"`, run this from the same Automation working directory:
+
+```bash
+node scripts/check_once.mjs --diagnose-network --json
+```
+
+This checks DNS resolution and HTTPS reachability for `api.twitterapi.io`. If `dns.ok=false` or `http.reached=false`, the failure is in the runtime environment's outbound network, not tweet content, LLM judgment, or state dedupe. Allow outbound HTTPS to `https://api.twitterapi.io` for the Automation runtime instead of broadening filesystem permissions.
+
+If `network_ok=true` but the normal check still fails, inspect the API key, target handle/userId, and the `api_pages` / `api_warning` fields.
 
 ## Links
 

@@ -1,0 +1,21 @@
+# Compatibility fallback for Codex versions or settings that still use the
+# older workspace-write sandbox instead of permission profiles.
+#
+# This allows only the project runtime entrypoint to run outside the sandbox
+# when it needs outbound HTTPS. Prefer the codex-reset-watchdog-net permission
+# profile when Codex can apply it.
+
+prefix_rule(
+    pattern = ["node", "scripts/check_once.mjs"],
+    decision = "allow",
+    justification = "Allow the watchdog runtime entrypoint to reach TwitterAPI.io when older workspace-write sandbox mode blocks network access.",
+    match = [
+        "node scripts/check_once.mjs --include-replies true --hydrate-reply-context true --json",
+        "node scripts/check_once.mjs --prime-state --json",
+        "node scripts/check_once.mjs --diagnose-network --json",
+    ],
+    not_match = [
+        "node scripts/self_test.mjs",
+        "npm run check_once",
+    ],
+)

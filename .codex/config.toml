@@ -1,0 +1,25 @@
+# codex-reset-watchdog permission profile
+#
+# This profile is intentionally narrower than full access:
+# - read minimal runtime files;
+# - write only inside the current workspace;
+# - allow outbound HTTPS only to TwitterAPI.io.
+#
+# If an older sandbox_mode is active in any config layer, Codex ignores
+# permission profiles. In that compatibility path, the project-local rule in
+# .codex/rules/codex-reset-watchdog.rules allows only this skill's Node
+# runtime entrypoint to run outside the sandbox.
+
+default_permissions = "codex-reset-watchdog-net"
+
+[permissions.codex-reset-watchdog-net.filesystem]
+":minimal" = "read"
+
+[permissions.codex-reset-watchdog-net.filesystem.":workspace_roots"]
+"." = "write"
+
+[permissions.codex-reset-watchdog-net.network]
+enabled = true
+
+[permissions.codex-reset-watchdog-net.network.domains]
+"api.twitterapi.io" = "allow"

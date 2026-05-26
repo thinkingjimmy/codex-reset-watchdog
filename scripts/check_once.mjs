@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 /**
- * - [INPUT]: 依赖 Node.js 内置 fs/path/os/fetch，读取 env/.env、TwitterAPI.io 和 JSON state。
+ * - [INPUT]: 依赖 Node.js 内置 fs/path/os/dns/fetch，读取 env/.env、TwitterAPI.io 和 JSON state。
  * - [OUTPUT]: 对外提供 check_once CLI、TwitterAPI.io 抓取函数、tweet 批次整理和 LLM-first JSON 汇总。
  * - [POS]: scripts 的零依赖运行入口，只搬运事实与维护记忆，语义判断交给 Codex Automation LLM。
  * - [PROTOCOL]: 变更时更新此头部，然后检查 README.md
  */
 
+import dns from "node:dns/promises";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -288,8 +289,22 @@ function sanitizeException(error) {
   return detail.length > 500 ? `${detail.slice(0, 500).trim()}...` : detail;
 }
 
+function errorChainText(error) {
+  const parts = [];
+  const seen = new Set();
+  let current = error;
+  for (let depth = 0; current && depth < 4 && !seen.has(current); depth += 1) {
+    seen.add(current);
+    for (const key of ["name", "code", "errno", "syscall", "hostname", "message"]) {
+      if (current[key]) parts.push(String(current[key]));
+    }
+    current = current.cause;
+  }
+  return parts.join(" ").toLowerCase();
+}
+
 function networkRootCause(error) {
-  const detail = String(error?.message || error || "").toLowerCase();
+  const detail = errorChainText(error);
   const dnsMarkers = [
     "nameresolutionerror",
     "nodename nor servname",
@@ -299,7 +314,11 @@ function networkRootCause(error) {
     "enotfound",
   ];
   if (dnsMarkers.some((marker) => detail.includes(marker))) return "dns_resolution_failure";
-  if (error?.name === "AbortError" || detail.includes("timeout")) return "timeout";
+  if (error?.name === "AbortError" || detail.includes("timeout") || detail.includes("etimedout")) return "timeout";
+  if (detail.includes("econnrefused") || detail.includes("connection refused")) return "connection_refused";
+  if (detail.includes("econnreset") || detail.includes("socket hang up")) return "connection_reset";
+  if (detail.includes("eacces") || detail.includes("eperm") || detail.includes("permission denied")) return "network_permission_denied";
+  if (detail.includes("certificate") || detail.includes("tls") || detail.includes("ssl")) return "tls_error";
   return "connection_error";
 }
 
@@ -367,6 +386,73 @@ export async function getJsonWithRetries(endpoint, { params, timeout = 20, opera
     throw new TwitterAPITransientError({ operation, url: endpoint, attempts, cause: lastError });
   }
   throw lastError;
+}
+
+export async function diagnoseNetwork({ handle, userId, timeout = 10 }) {
+  const host = new URL(LAST_TWEETS_URL).hostname;
+  const diagnostic = {
+    host,
+    endpoint: LAST_TWEETS_URL,
+    dns: { ok: false },
+    http: { reached: false },
+    api_key_configured: false,
+    network_ok: false,
+  };
+
+  try {
+    const lookup = await dns.lookup(host);
+    diagnostic.dns = { ok: true, address: lookup.address, family: lookup.family };
+  } catch (error) {
+    diagnostic.dns = {
+      ok: false,
+      error_type: error?.name || "Error",
+      root_cause: networkRootCause(error),
+      detail: sanitizeException(error),
+    };
+  }
+
+  const url = new URL(LAST_TWEETS_URL);
+  if (userId) url.searchParams.set("userId", userId);
+  else if (handle) url.searchParams.set("userName", String(handle).replace(/^@/, ""));
+  url.searchParams.set("includeReplies", "true");
+
+  const headers = {};
+  try {
+    headers["X-API-Key"] = requireApiKey();
+    diagnostic.api_key_configured = true;
+  } catch (error) {
+    diagnostic.api_key_error = sanitizeException(error);
+  }
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeout * 1000);
+  const started = Date.now();
+  try {
+    const response = await fetch(url, { headers, signal: controller.signal });
+    diagnostic.http = {
+      reached: true,
+      status: response.status,
+      status_text: response.statusText,
+      ok: response.ok,
+      elapsed_ms: Date.now() - started,
+    };
+  } catch (error) {
+    diagnostic.http = {
+      reached: false,
+      error_type: error?.name || "Error",
+      root_cause: networkRootCause(error),
+      detail: sanitizeException(error),
+      elapsed_ms: Date.now() - started,
+    };
+  } finally {
+    clearTimeout(timer);
+  }
+
+  diagnostic.network_ok = Boolean(diagnostic.dns.ok && diagnostic.http.reached);
+  diagnostic.hint = diagnostic.network_ok
+    ? "Network reaches TwitterAPI.io. If the main check still fails, inspect HTTP status, API key, target handle/userId, and api_pages."
+    : "This environment cannot reach api.twitterapi.io. In Codex, use the project codex-reset-watchdog-net permission profile or otherwise allow outbound HTTPS to this host; full filesystem access is not required.";
+  return diagnostic;
 }
 
 function isTransientNetworkError(error) {
@@ -696,6 +782,7 @@ export function parseArgs(argv = process.argv.slice(2)) {
     alertOnFirstRun: envBool("ALERT_ON_FIRST_RUN", false),
     primeState: false,
     dryRun: false,
+    diagnoseNetwork: false,
     json: false,
   };
 
@@ -703,6 +790,7 @@ export function parseArgs(argv = process.argv.slice(2)) {
     const current = argv[index];
     if (current === "--prime-state") args.primeState = true;
     else if (current === "--dry-run") args.dryRun = true;
+    else if (current === "--diagnose-network") args.diagnoseNetwork = true;
     else if (current === "--json") args.json = true;
     else if (current === "--alert-on-first-run") args.alertOnFirstRun = true;
     else if (current.startsWith("--handle")) {
@@ -750,6 +838,9 @@ function transientNetworkSummary(error, store, args) {
     stateError = sanitizeException(recordError);
   }
   const threshold = Math.max(envInt("OPERATIONAL_ERROR_REPORT_THRESHOLD", 3), 1);
+  const reportEvery = Math.max(envInt("OPERATIONAL_ERROR_REPORT_EVERY_FAILURES", 24), 1);
+  const failureCount = Number(failure.count);
+  const reportToTriage = stateError ? true : shouldReportOperationalFailure(failureCount, threshold, reportEvery);
   return {
     status: "transient_network_error",
     target: args.userId || `@${args.handle}`,
@@ -763,15 +854,22 @@ function transientNetworkSummary(error, store, args) {
     state: store.info(),
     operational_error: {
       ...error.toSummary(),
-      consecutive_failures: Number(failure.count),
-      report_to_triage: stateError ? true : Number(failure.count) >= threshold,
+      consecutive_failures: failureCount,
+      report_to_triage: reportToTriage,
       report_threshold: threshold,
+      report_every_failures: reportEvery,
       retry_next_run: true,
       state_error: stateError,
       message: "Transient TwitterAPI.io network failure; keep automation active and retry on the next run.",
     },
     results: [],
   };
+}
+
+export function shouldReportOperationalFailure(count, threshold, reportEvery) {
+  if (count < threshold) return false;
+  if (count === threshold) return true;
+  return (count - threshold) % reportEvery === 0;
 }
 
 function runtimeErrorSummary(error, args, store = null) {
@@ -813,6 +911,19 @@ export async function main() {
     return 1;
   }
   args.handle = args.handle.replace(/^@/, "");
+
+  if (args.diagnoseNetwork) {
+    const diagnostic = await diagnoseNetwork({ handle: args.handle || null, userId: args.userId || null });
+    const summary = {
+      status: "network_diagnostic",
+      target: args.userId || (args.handle ? `@${args.handle}` : null),
+      ...diagnostic,
+    };
+    if (args.json) console.log(prettyJson(summary));
+    else console.log(summary.hint);
+    return 0;
+  }
+
   const store = new DedupeStore();
 
   let rawTweets = [];

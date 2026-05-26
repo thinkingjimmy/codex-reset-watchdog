@@ -18,7 +18,9 @@ import {
   buildReviewItem,
   eventKeyForTweet,
   extractTweets,
+  parseArgs,
   processCandidates,
+  shouldReportOperationalFailure,
   tweetsFromPayload,
 } from "./check_once.mjs";
 
@@ -104,6 +106,13 @@ async function main() {
     fallbackStore.markSeen("fallback-works");
     assert.equal(fallbackStore.info().fallback_used, true);
     assert.equal(fallbackStore.isSeen("fallback-works"), true);
+
+    assert.equal(shouldReportOperationalFailure(1, 3, 24), false);
+    assert.equal(shouldReportOperationalFailure(2, 3, 24), false);
+    assert.equal(shouldReportOperationalFailure(3, 3, 24), true);
+    assert.equal(shouldReportOperationalFailure(4, 3, 24), false);
+    assert.equal(shouldReportOperationalFailure(27, 3, 24), true);
+    assert.equal(parseArgs(["--diagnose-network"]).diagnoseNetwork, true);
 
     console.log("self_test passed");
   } finally {

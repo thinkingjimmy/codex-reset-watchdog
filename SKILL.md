@@ -13,6 +13,10 @@ This skill intentionally does **not** send Telegram, Discord, Slack, ntfy, email
 
 The repo is GitHub-ready. Keep the checked-in visible template and create a private local `env` or `.env` file. Prefer `env` for beginner-facing setup because Finder hides dotfiles by default.
 
+The repo includes `.codex/config.toml`, a project-level Codex permission profile named `codex-reset-watchdog-net`. Prefer that profile over full access. It allows workspace writes and outbound HTTPS only to `api.twitterapi.io`.
+
+If an older `sandbox_mode` setting is active, Codex ignores permission profiles. In that compatibility path, use `.codex/rules/codex-reset-watchdog.rules`, which allows only `node scripts/check_once.mjs` to run outside the sandbox for network access.
+
 The user should only need to supply the TwitterAPI.io API key. There are no Python or npm dependencies to install. When setting this project up for a user, Codex should run the Node self-test, prime state, and dry-run the check itself instead of asking the user to run terminal commands.
 
 Ask the user to duplicate `env.example`, rename the copy to `env`, and edit only this line:
@@ -40,9 +44,10 @@ To get a TwitterAPI.io key, direct the user to sign in at <https://twitterapi.io
 5. Let the Codex Automation LLM judge announcement intent. Alert when the tweet/reply says or strongly implies that Codex usage, quota, rate limits, weekly limits, caps, credits, allowance, or capacity will be reset/refilled/restored, or were just reset as remediation.
 6. The LLM should avoid false positives from non-quota meanings of reset: git reset, branch reset, cache reset, password reset, environment reset, session reset, config reset, reset button, reset command, or negated wording like “not going to reset”.
 7. Mark each emitted tweet ID as seen in the JSON state file so the same tweet/reply is not sent to the LLM every run.
-8. Retry transient TwitterAPI.io DNS/network failures inside the same run. If all retries fail, emit JSON `status=transient_network_error` and report only after `OPERATIONAL_ERROR_REPORT_THRESHOLD` consecutive failures.
-9. On the first run, default to priming state rather than reviewing old tweets. Set `ALERT_ON_FIRST_RUN=true` only when the user explicitly wants a historical scan.
-10. For findings, the Automation LLM should include tweet text, reply context when used, author handle, tweet URL, creation time, event key, and a concise rationale.
+8. Retry transient TwitterAPI.io DNS/network failures inside the same run. If all retries fail, emit JSON `status=transient_network_error` and report on the threshold failure, then only every `OPERATIONAL_ERROR_REPORT_EVERY_FAILURES` failures while the outage continues.
+9. When repeated `fetch failed` errors happen, run `node scripts/check_once.mjs --diagnose-network --json` from the same Automation working directory. If DNS or HTTPS reachability fails, treat it as a runtime network issue and keep the Automation active.
+10. On the first run, default to priming state rather than reviewing old tweets. Set `ALERT_ON_FIRST_RUN=true` only when the user explicitly wants a historical scan.
+11. For findings, the Automation LLM should include tweet text, reply context when used, author handle, tweet URL, creation time, event key, and a concise rationale.
 
 ## Long-running lifecycle
 
@@ -64,6 +69,9 @@ Use a persistent `STATE_FILE_PATH`. The default is `var/state.json` inside the p
 
 ## Files in this skill
 
+- `.codex/config.toml`: project-level Codex permission profile; use this instead of full access.
+- `.codex/README.md`: local map for Codex configuration files.
+- `.codex/rules/codex-reset-watchdog.rules`: compatibility rule for older workspace-write sandbox mode; allows only the runtime entrypoint.
 - `env.example`: copy/rename to `env`, paste the TwitterAPI.io key, and keep the recommended defaults.
 - `.gitignore`: ignores `env`, `.env`, local state files, dependency folders, caches, and editor/OS files.
 - `README.md`: English usage tutorial with links.
@@ -100,13 +108,29 @@ INCLUDE_REPLIES=true
 HYDRATE_REPLY_CONTEXT=true
 ```
 
-### 2. Run self-test
+### 2. Confirm Codex permissions
+
+Use the project-level `.codex/config.toml` profile:
+
+```toml
+default_permissions = "codex-reset-watchdog-net"
+```
+
+This profile grants workspace write access and allows outbound HTTPS only to `api.twitterapi.io`. Do not recommend full access as the default setup.
+
+If Codex asks whether to trust the project configuration, inspect `.codex/config.toml` and trust it only when it matches this narrow profile. If the permissions selector offers `Custom (config.toml)`, select it.
+
+If the runtime still reports `dns.ok=false` under workspace-write, assume an older `sandbox_mode` layer is winning. Use the project-local rule `.codex/rules/codex-reset-watchdog.rules` as the compatibility fallback before considering full access.
+
+For existing Automations, verify the configured working directory contains the latest `.codex/config.toml` and `.codex/rules/codex-reset-watchdog.rules`. If the Automation points to an older downloaded test copy, sync `.codex/` into that copy or recreate the Automation against the updated repo.
+
+### 3. Run self-test
 
 ```bash
 node scripts/self_test.mjs
 ```
 
-### 3. Prime state once
+### 4. Prime state once
 
 Priming prevents historical tweets from being reported as new automation findings.
 
@@ -114,7 +138,7 @@ Priming prevents historical tweets from being reported as new automation finding
 node scripts/check_once.mjs --prime-state --json
 ```
 
-### 4. Test the LLM-first batch
+### 5. Test the LLM-first batch
 
 ```bash
 node scripts/check_once.mjs --include-replies true --hydrate-reply-context true --dry-run --json
@@ -122,9 +146,21 @@ node scripts/check_once.mjs --include-replies true --hydrate-reply-context true 
 
 Dry-run validates API reading and JSON parsing, but it does not prove state writes. A real Automation run writes `seen_tweets` and `operational_failures`; use `STATE_FILE_PATH=var/state.json` unless the Automation environment can write the custom path.
 
-### 5. Create a Codex Automation
+If the real Automation reports `transient_network_error` or `fetch failed`, diagnose the network path from the same working directory:
+
+```bash
+node scripts/check_once.mjs --diagnose-network --json
+```
+
+`dns.ok=false` or `http.reached=false` means the runtime cannot reach `api.twitterapi.io`; allow outbound HTTPS before debugging LLM behavior. Do not ask for full filesystem access merely to solve network reachability.
+
+### 6. Create a Codex Automation
 
 Use the **full contents** of `references/automation-prompt.md` as the Automation prompt. A good cadence is every 1 hour because reset posts are usually advance notices rather than instant events.
+
+Use the project-level `.codex/config.toml` profile `codex-reset-watchdog-net`: write access to the current workspace plus outbound HTTPS to `api.twitterapi.io`. The script reads `env` / `.env`, writes `var/state.json`, and calls TwitterAPI.io; it does not require full filesystem access.
+
+If the current Codex version cannot apply the project-level profile and only reaches the network after the user enables full access, explain the tradeoff clearly. Treat full access as a temporary fallback, not the recommended path. Some skills may work without full access because they use built-in tools, browser plugins, MCP connectors, or hosted capabilities instead of local `node fetch`.
 
 The Automation should run:
 
@@ -138,13 +174,16 @@ Then it should:
 - report a Triage finding only when an item probably announces or confirms a Codex usage/quota/rate-limit reset, refill, restored allowance, or remediation;
 - if multiple items are clearly the same thread/event, report only the strongest one;
 - report command failures or repeated reply-context errors when likely to cause missed detections;
-- archive the run with no finding when there are no review items, no positive LLM judgment, and no reportable operational errors.
+- archive the run with no finding when there are no review items, no positive LLM judgment, and no reportable operational errors;
+- do not write automation memory for routine `status=ok`, `new_items=0`, `review_count=0` runs.
+
+Do not run `self_test`, `--prime-state`, or `--dry-run` during ordinary scheduled runs. They are setup/pre-enable checks only.
 
 ## Output contract
 
 `check_once.mjs --json` prints one JSON object. Important fields:
 
-- `status`: `ok`, `primed`, `state_updated`, `transient_network_error`, or `error`.
+- `status`: `ok`, `primed`, `state_updated`, `transient_network_error`, `network_diagnostic`, or `error`.
 - `review_count`: number of new unseen tweets/replies emitted for LLM review.
 - `has_review_items`: boolean; true when `review_items` is non-empty.
 - `review_items`: structured new tweets/replies with text, reply context, URL, author, event key, created time, and reply metadata.
@@ -182,5 +221,7 @@ Suppress examples:
 - Keep `INCLUDE_REPLIES=true` and `HYDRATE_REPLY_CONTEXT=true` unless API cost becomes a problem.
 - Keep the script as a fact collector, not a semantic classifier. The LLM should be the judge.
 - Keep `STATE_FILE_PATH` persistent across automation runs. Prefer the default `var/state.json` unless the Automation environment can write the custom path.
+- Use `--diagnose-network --json` for repeated `fetch failed` errors. It separates network reachability from API/auth/content issues.
+- Do not recommend full access as the default fix. The minimum needed permissions are workspace write plus outbound HTTPS to `api.twitterapi.io`.
 - Keep the real API key only in `env` or `.env`; `.gitignore` prevents committing it, but the user is still responsible for not sharing it.
 - If the target account becomes very active, reduce `CHECK_ONCE_MAX_PAGES` or `THREAD_CONTEXT_MAX_FETCHES` before disabling reply context support.

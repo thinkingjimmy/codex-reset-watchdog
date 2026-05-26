@@ -33,6 +33,9 @@ Commit these files:
 
 ```text
 env.example
+.codex/config.toml
+.codex/README.md
+.codex/rules/codex-reset-watchdog.rules
 .gitignore
 README.md
 README.zh-CN.md
@@ -78,6 +81,10 @@ Dry-run checks are useful for API reading and JSON parsing, but they do not prov
 
 ## Runtime command
 
+Use the project-level `.codex/config.toml` profile `codex-reset-watchdog-net`. This runtime needs write access to the current workspace and outbound HTTPS to `api.twitterapi.io`; it does not require full filesystem access.
+
+If the Codex UI only lets local shell commands reach the network after enabling full access, treat that as a runtime permission limitation. The project itself still only needs workspace write plus network egress, so full access should be a temporary fallback rather than the recommended setup.
+
 Codex Automation should run:
 
 ```bash
@@ -85,6 +92,40 @@ node scripts/check_once.mjs --include-replies true --hydrate-reply-context true 
 ```
 
 Recommended cadence: every 30-60 minutes.
+
+## Codex permission profile
+
+The checked-in `.codex/config.toml` file defines the recommended project permission profile:
+
+```toml
+default_permissions = "codex-reset-watchdog-net"
+
+[permissions.codex-reset-watchdog-net.filesystem]
+":minimal" = "read"
+
+[permissions.codex-reset-watchdog-net.filesystem.":workspace_roots"]
+"." = "write"
+
+[permissions.codex-reset-watchdog-net.network]
+enabled = true
+
+[permissions.codex-reset-watchdog-net.network.domains]
+"api.twitterapi.io" = "allow"
+```
+
+This is the preferred alternative to full access. It keeps filesystem access scoped to the workspace while allowing the one network destination the runtime needs.
+
+When Codex asks whether to trust project configuration, inspect `.codex/config.toml` first. If the permissions selector offers `Custom (config.toml)`, select it for this project.
+
+Permission profiles do not compose with older `sandbox_mode` settings. If `workspace-write` is still active and blocks local `node fetch`, use the project-local rule file instead:
+
+```text
+.codex/rules/codex-reset-watchdog.rules
+```
+
+That rule allows only `node scripts/check_once.mjs` to run outside the sandbox. It is the compatibility fallback before considering full access.
+
+For existing Automations, check `automation.toml` and confirm `cwds` points at a folder that has the latest `.codex/`. A common failure mode is updating the source repo while the Automation still runs an older copied test directory.
 
 ## State path
 
@@ -123,6 +164,18 @@ Report a Codex Triage finding when:
 
 Do not report one-off DNS/network failures. The script retries transient TwitterAPI.io connection failures inside the same run, then records consecutive failures in `STATE_FILE_PATH`.
 
+For repeated `fetch failed` or `connection_error` results, diagnose the network path from the same working directory:
+
+```bash
+node scripts/check_once.mjs --diagnose-network --json
+```
+
+Interpretation:
+
+- `dns.ok=false`: the runtime cannot resolve `api.twitterapi.io`.
+- `http.reached=false`: DNS may work, but outbound HTTPS to `api.twitterapi.io` is blocked or timing out.
+- `network_ok=true`: network reachability is not the blocker; inspect API key, target handle/userId, and `api_pages` / `api_warning`.
+
 Useful knobs:
 
 ```env
@@ -131,9 +184,12 @@ TWITTERAPI_IO_RETRY_SLEEP_SECONDS=5
 TWITTERAPI_IO_RETRY_MAX_SLEEP_SECONDS=30
 TRANSIENT_NETWORK_ERRORS_EXIT_ZERO=true
 OPERATIONAL_ERROR_REPORT_THRESHOLD=3
+OPERATIONAL_ERROR_REPORT_EVERY_FAILURES=24
 ```
 
-Do not report when there are simply no new tweets, no positive LLM judgments, or a non-reportable transient network status.
+Do not report when there are simply no new tweets, no positive LLM judgments, or a non-reportable transient network status. Transient network errors report on the threshold failure, then only every `OPERATIONAL_ERROR_REPORT_EVERY_FAILURES` failures while the outage continues.
+
+Do not write automation memory for routine successful no-op runs. After state is primed, repeated output such as `status=ok`, `fetched=40`, `new_items=0`, and `review_count=0` is expected and should be silently archived.
 
 ## Useful links
 

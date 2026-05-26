@@ -75,6 +75,12 @@ Use a persistent `STATE_FILE_PATH`, preferably outside a repo worktree, such as 
 - `references/llm-judge-rubric.md`: rubric for judging `review_items` inside Codex Automation.
 - `references/deployment.md`: setup and operating notes.
 
+## Automation prompt source of truth
+
+When creating or updating the Codex Automation, use the full contents of `references/automation-prompt.md` as the Automation prompt. Do not summarize, freestyle, or replace it with an improvised prompt. The README instruction is only a user-facing wrapper that asks Codex to create the Automation; the durable runtime contract lives in `references/automation-prompt.md`.
+
+Use `references/llm-judge-rubric.md` as the judging rubric referenced by that prompt. If behavior changes, update these reference files first, then update README/SKILL descriptions to match.
+
 ## Recommended workflow
 
 ### 1. Configure local env
@@ -116,7 +122,7 @@ node scripts/check_once.mjs --include-replies true --hydrate-reply-context true 
 
 ### 5. Create a Codex Automation
 
-Use `references/automation-prompt.md`. A good cadence is every 30-60 minutes because reset posts are usually advance notices rather than instant events.
+Use the **full contents** of `references/automation-prompt.md` as the Automation prompt. A good cadence is every 1 hour because reset posts are usually advance notices rather than instant events.
 
 The Automation should run:
 

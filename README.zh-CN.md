@@ -82,6 +82,7 @@ TWITTERAPI_IO_KEY=你的_key_粘贴在这里
 2. 运行 node scripts/check_once.mjs --prime-state --json 初始化状态
 
 然后创建一个每 1 小时运行的 Automation：
+- Automation prompt 必须直接使用 references/automation-prompt.md 的完整内容，不要自由改写
 - 工作目录使用当前 codex-reset-watchdog 文件夹
 - 每次运行命令：node scripts/check_once.mjs --include-replies true --hydrate-reply-context true --json
 - 每次读取 JSON 里的 review_items
@@ -91,9 +92,9 @@ TWITTERAPI_IO_KEY=你的_key_粘贴在这里
 - 不要输出、复制或写入我的 API key
 ```
 
-Codex 会先验证脚本能跑，再把当前已有 tweets/replies 标记为基线，最后创建定时 Automation。之后你只需要等 Triage finding；没有 reset 信号时不会打扰你。
+Codex 会先验证脚本能跑，再把当前已有 tweets/replies 标记为基线，最后用 [`references/automation-prompt.md`](references/automation-prompt.md) 的完整内容创建定时 Automation。之后你只需要等 Triage finding；没有 reset 信号时不会打扰你。
 
-底层 Automation 规则写在 [`references/automation-prompt.md`](references/automation-prompt.md)，LLM 判断标准写在 [`references/llm-judge-rubric.md`](references/llm-judge-rubric.md)。
+底层 Automation 规则写在 [`references/automation-prompt.md`](references/automation-prompt.md)，LLM 判断标准写在 [`references/llm-judge-rubric.md`](references/llm-judge-rubric.md)。创建 Automation 时应当使用这些文件作为准绳，而不是让 Codex 临场发挥。
 
 ## 状态与去重
 

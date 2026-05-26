@@ -82,6 +82,7 @@ Before creating it:
 2. Run node scripts/check_once.mjs --prime-state --json to initialize state
 
 Then create an Automation that runs every 1 hour:
+- Automation prompt: use the full contents of references/automation-prompt.md directly; do not improvise or rewrite it
 - working directory: the current codex-reset-watchdog folder
 - command: node scripts/check_once.mjs --include-replies true --hydrate-reply-context true --json
 - read review_items from the JSON output on every run
@@ -91,7 +92,7 @@ Then create an Automation that runs every 1 hour:
 - do not print, copy, or write my API key anywhere
 ```
 
-Codex will verify the script, prime the current tweets/replies as the baseline, then create the scheduled Automation. The durable Automation prompt lives in [`references/automation-prompt.md`](references/automation-prompt.md), and the LLM judging rubric lives in [`references/llm-judge-rubric.md`](references/llm-judge-rubric.md).
+Codex will verify the script, prime the current tweets/replies as the baseline, then create the scheduled Automation using the full contents of [`references/automation-prompt.md`](references/automation-prompt.md). The LLM judging rubric lives in [`references/llm-judge-rubric.md`](references/llm-judge-rubric.md). These files are the source of truth; do not let Codex invent a different runtime prompt.
 
 ## State And Dedupe
 

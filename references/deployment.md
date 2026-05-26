@@ -93,7 +93,7 @@ Recommended cadence: every 30–60 minutes.
 Use a persistent state file path:
 
 ```env
-STATE_FILE_PATH=~/.cache/codex-reset-watch/state.json
+STATE_FILE_PATH=~/.cache/codex-reset-watchdog/state.json
 ```
 
 Do not put the state file inside a disposable worktree. If the file is deleted, the script loses dedupe memory and may reprocess old tweets.

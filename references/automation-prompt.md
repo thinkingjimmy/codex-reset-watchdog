@@ -3,7 +3,7 @@
 Use this prompt when creating a scheduled Codex Automation for this skill.
 
 ```text
-Use the $codex-reset-watch skill.
+Use the $codex-reset-watchdog skill.
 
 Target account: `@thsottiaux` (`https://x.com/thsottiaux`). Use `TARGET_X_HANDLE=thsottiaux` unless `TARGET_X_USER_ID` is configured.
 
@@ -12,7 +12,7 @@ The TwitterAPI.io key should be in the local `env` or `.env` file as `TWITTERAPI
 Cadence: every 30 minutes, or hourly if lower cost/noise is preferred.
 
 Each run:
-1. Work from the directory that contains the codex-reset-watch skill files.
+1. Work from the directory that contains the codex-reset-watchdog skill files.
 2. Run:
    python scripts/check_once.py --include-replies true --hydrate-reply-context true --json
 3. Read the JSON output.
@@ -43,7 +43,7 @@ State/lifecycle:
 - The script marks seen tweet IDs in the state file, so the same tweet should not alert again.
 - A future tweet/reply with a new tweet ID or new event key should be treated as a new candidate and can produce a new finding.
 - Transient TwitterAPI.io DNS/network failures are retried inside the script. One-off failures should not create noisy findings.
-- Keep `STATE_FILE_PATH` persistent across runs, preferably `~/.cache/codex-reset-watch/state.json`.
+- Keep `STATE_FILE_PATH` persistent across runs, preferably `~/.cache/codex-reset-watchdog/state.json`.
 ```
 
 Before enabling the automation, prime the local state once:

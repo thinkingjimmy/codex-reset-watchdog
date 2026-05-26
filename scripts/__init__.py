@@ -1,1 +1,1 @@
-"""Runtime helpers for the codex-reset-watch skill."""
+"""Runtime helpers for the codex-reset-watchdog skill."""

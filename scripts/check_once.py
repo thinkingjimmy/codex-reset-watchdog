@@ -443,7 +443,7 @@ def main() -> int:
     if alert_messages:
         joined = "\n\n---\n\n".join(alert_messages)
         finding_markdown = (
-            f"## Codex reset watch finding\n\n"
+            f"## Codex reset watchdog finding\n\n"
             f"Detected {alerts} new likely Codex reset-related tweet/reply.\n\n"
             f"{joined}"
         )

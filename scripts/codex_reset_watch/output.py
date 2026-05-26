@@ -25,7 +25,7 @@ def format_decision_alert(tweet: TweetCandidate, decision: MatchDecision) -> str
             snippet = snippet[:580].rstrip() + " …"
         context = f"\nReply context: {snippet}"
     return (
-        "Codex reset watch alert\n"
+        "Codex reset watchdog alert\n"
         f"Type: {decision.category}\n"
         f"Confidence: {decision.confidence} (score {decision.score})\n"
         f"Author: {handle}{created}{is_reply_note}\n"

@@ -44,7 +44,7 @@ def _load_runtime_environment() -> None:
         root / ".secrets.env",
         root / "secrets.env",
         root / "secrets" / "secrets.env",
-        Path.home() / ".config" / "codex-reset-watch" / "secrets.env",
+        Path.home() / ".config" / "codex-reset-watchdog" / "secrets.env",
     ]
     for candidate in secret_env_candidates:
         _load_env_file_if_present(candidate)
@@ -110,7 +110,7 @@ def require_api_key() -> str:
         os.getenv("TWITTERAPI_IO_KEY_FILE"),
         root / "secrets" / "twitterapi_io_key",
         root / ".twitterapi_io_key",
-        Path.home() / ".config" / "codex-reset-watch" / "twitterapi_io_key",
+        Path.home() / ".config" / "codex-reset-watchdog" / "twitterapi_io_key",
     ]
     for candidate in key_file_candidates:
         api_key = _read_first_nonempty_line(candidate)

@@ -1,4 +1,4 @@
-# codex-reset-watch
+# codex-reset-watchdog
 
 [中文说明](README.zh-CN.md)
 
@@ -16,10 +16,10 @@ A Codex skill repo for monitoring [`@thsottiaux`](https://x.com/thsottiaux) with
 
 ## Skill Layout
 
-The repo is shaped as a single Codex skill directory: `SKILL.md` at the root, optional `agents/`, `references/`, and `scripts/` beside it. If embedding this skill inside another repo, copy this directory to `.agents/skills/codex-reset-watch/`.
+The repo is shaped as a single Codex skill directory: `SKILL.md` at the root, optional `agents/`, `references/`, and `scripts/` beside it. If embedding this skill inside another repo, copy this directory to `.agents/skills/codex-reset-watchdog/`.
 
 ```text
-codex-reset-watch/
+codex-reset-watchdog/
   SKILL.md                         # Skill metadata and operating instructions
   README.md                        # English setup guide
   README.zh-CN.md                  # Chinese setup guide
@@ -77,7 +77,7 @@ Recommended defaults:
 
 ```env
 TARGET_X_HANDLE=thsottiaux
-STATE_FILE_PATH=~/.cache/codex-reset-watch/state.json
+STATE_FILE_PATH=~/.cache/codex-reset-watchdog/state.json
 INCLUDE_REPLIES=true
 HYDRATE_REPLY_CONTEXT=true
 CODEX_LLM_REVIEW_ENABLED=true
@@ -86,7 +86,7 @@ CODEX_LLM_REVIEW_ENABLED=true
 Ask Codex to finish setup:
 
 ```text
-Install dependencies for codex-reset-watch, run self_test, then prime state. Do not print my API key.
+Install dependencies for codex-reset-watchdog, run self_test, then prime state. Do not print my API key.
 ```
 
 Codex should run:
@@ -135,7 +135,7 @@ python scripts/check_once.py --include-replies true --hydrate-reply-context true
 Keep the state file outside disposable worktrees:
 
 ```env
-STATE_FILE_PATH=~/.cache/codex-reset-watch/state.json
+STATE_FILE_PATH=~/.cache/codex-reset-watchdog/state.json
 ```
 
 ## Output Contract

@@ -1,4 +1,4 @@
-# codex-reset-watch
+# codex-reset-watchdog
 
 [English README](README.md)
 
@@ -44,10 +44,10 @@ TWITTERAPI_IO_KEY=你的_key_粘贴在这里
 
 ## Skill 结构
 
-这个仓库本身就是一个单 skill 目录：根目录放 `SKILL.md`，旁边放可选的 `agents/`、`references/`、`scripts/`。如果要嵌入到另一个仓库，把本目录复制到 `.agents/skills/codex-reset-watch/`。
+这个仓库本身就是一个单 skill 目录：根目录放 `SKILL.md`，旁边放可选的 `agents/`、`references/`、`scripts/`。如果要嵌入到另一个仓库，把本目录复制到 `.agents/skills/codex-reset-watchdog/`。
 
 ```text
-codex-reset-watch/
+codex-reset-watchdog/
   SKILL.md                         # skill 元数据和运行指令
   README.md                        # 英文说明
   README.zh-CN.md                  # 中文说明
@@ -79,7 +79,7 @@ codex-reset-watch/
 用户填好 `env` 后，可以直接对 Codex 说：
 
 ```text
-请帮我安装 codex-reset-watch 的依赖，运行 self_test，然后 prime state。不要把我的 API key 输出到聊天里。
+请帮我安装 codex-reset-watchdog 的依赖，运行 self_test，然后 prime state。不要把我的 API key 输出到聊天里。
 ```
 
 Codex 应该代用户执行：
@@ -120,7 +120,7 @@ python scripts/check_once.py --include-replies true --hydrate-reply-context true
 默认状态文件位置：
 
 ```env
-STATE_FILE_PATH=~/.cache/codex-reset-watch/state.json
+STATE_FILE_PATH=~/.cache/codex-reset-watchdog/state.json
 ```
 
 ## 输出格式

@@ -9,7 +9,7 @@ from typing import Any
 from .config import env_bool, env_int
 
 
-DEFAULT_STATE_FILE_PATH = "~/.cache/codex-reset-watch/state.json"
+DEFAULT_STATE_FILE_PATH = "~/.cache/codex-reset-watchdog/state.json"
 
 
 class DedupeStore:

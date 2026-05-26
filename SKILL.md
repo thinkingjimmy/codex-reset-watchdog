@@ -1,9 +1,9 @@
 ---
-name: codex-reset-watch
+name: codex-reset-watchdog
 description: Set up a Codex Automation-only, hybrid rule-plus-LLM check for pre-announcement tweets and replies about OpenAI Codex usage, quota, or rate-limit resets. Use when monitoring @thsottiaux or another X/Twitter account via TwitterAPI.io and notifying only through Codex Automation/Triage.
 ---
 
-# Codex Reset Watch
+# Codex Reset Watchdog
 
 Use this skill to implement or maintain a **Codex Automation-only** TwitterAPI.io check. The default target is `@thsottiaux` (`https://x.com/thsottiaux`). The skill reports a Codex Automation finding when a tweet or reply likely announces a Codex usage/quota/rate-limit reset, quota refill, restored allowance, or related remediation.
 
@@ -65,7 +65,7 @@ This means:
 - if a genuinely new reset announcement appears later with a new tweet ID or a new event key, it is eligible for a new finding;
 - if the same thread later gets a “done/reset complete” update, `EVENT_DEDUPE_ALLOW_PHASE_UPDATES=true` allows that completed phase to alert once.
 
-Use a persistent `STATE_FILE_PATH`, preferably outside a repo worktree, such as `~/.cache/codex-reset-watch/state.json`.
+Use a persistent `STATE_FILE_PATH`, preferably outside a repo worktree, such as `~/.cache/codex-reset-watchdog/state.json`.
 
 ## Files in this skill
 
@@ -101,7 +101,7 @@ Keep these defaults unless you need to change them:
 
 ```env
 TARGET_X_HANDLE=thsottiaux
-STATE_FILE_PATH=~/.cache/codex-reset-watch/state.json
+STATE_FILE_PATH=~/.cache/codex-reset-watchdog/state.json
 INCLUDE_REPLIES=true
 HYDRATE_REPLY_CONTEXT=true
 CODEX_LLM_REVIEW_ENABLED=true

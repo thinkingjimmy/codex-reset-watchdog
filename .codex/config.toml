@@ -22,4 +22,4 @@ default_permissions = "codex-reset-watchdog-net"
 enabled = true
 
 [permissions.codex-reset-watchdog-net.network.domains]
-"apitest.dayclaw.com" = "allow"
+"api.dayclaw.com" = "allow"

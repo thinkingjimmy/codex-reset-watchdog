@@ -5,7 +5,7 @@ description: Set up a Codex Automation-only, LLM-first check for pre-announcemen
 
 # Codex Reset Watchdog
 
-Use this skill to implement or maintain a **Codex Automation-only** Dayclaw public-source check. The default target is `@thsottiaux` (`https://x.com/thsottiaux`) via `https://apitest.dayclaw.com/api/source/public/x/thsottiaux/items`. The skill reports a Codex Automation finding when the Automation LLM judges that an item likely announces, confirms, schedules, completes, or remediates a Codex usage/quota/rate-limit reset, quota refill, restored allowance, or related make-good.
+Use this skill to implement or maintain a **Codex Automation-only** Dayclaw public-source check. The default target is `@thsottiaux` (`https://x.com/thsottiaux`) via `https://api.dayclaw.com/api/source/public/x/thsottiaux/items`. The skill reports a Codex Automation finding when the Automation LLM judges that an item likely announces, confirms, schedules, completes, or remediates a Codex usage/quota/rate-limit reset, quota refill, restored allowance, or related make-good.
 
 This skill intentionally does **not** send Telegram, Discord, Slack, ntfy, email, or generic webhook messages. The notification surface is Codex itself: `scripts/check_once.mjs` emits structured JSON with `review_items`, and the scheduled Codex Automation posts a Triage finding only when its LLM sees a reset signal.
 
@@ -13,7 +13,7 @@ This skill intentionally does **not** send Telegram, Discord, Slack, ntfy, email
 
 The repo is GitHub-ready. Keep the checked-in visible template and create a private local `env` or `.env` file only when you want to override defaults. Prefer `env` for beginner-facing setup because Finder hides dotfiles by default.
 
-The repo includes `.codex/config.toml`, a project-level Codex permission profile named `codex-reset-watchdog-net`. Prefer that profile over full access. It allows workspace writes and outbound HTTPS only to `apitest.dayclaw.com`.
+The repo includes `.codex/config.toml`, a project-level Codex permission profile named `codex-reset-watchdog-net`. Prefer that profile over full access. It allows workspace writes and outbound HTTPS only to `api.dayclaw.com`.
 
 If an older `sandbox_mode` setting is active, Codex ignores permission profiles. In that compatibility path, use `.codex/rules/codex-reset-watchdog.rules`, which allows only `node scripts/check_once.mjs` to run outside the sandbox for network access.
 
@@ -30,7 +30,7 @@ STATE_FILE_PATH=var/state.json
 INCLUDE_REPLIES=true
 ```
 
-When `DAYCLAW_SOURCE_ITEMS_URL` is blank, `scripts/check_once.mjs` derives `https://apitest.dayclaw.com/api/source/public/x/<TARGET_X_HANDLE>/items`.
+When `DAYCLAW_SOURCE_ITEMS_URL` is blank, `scripts/check_once.mjs` derives `https://api.dayclaw.com/api/source/public/x/<TARGET_X_HANDLE>/items`.
 
 ## Core behavior
 
@@ -168,7 +168,7 @@ Use the project-level `.codex/config.toml` profile:
 default_permissions = "codex-reset-watchdog-net"
 ```
 
-This profile grants workspace write access and allows outbound HTTPS only to `apitest.dayclaw.com`. Do not recommend full access as the default setup.
+This profile grants workspace write access and allows outbound HTTPS only to `api.dayclaw.com`. Do not recommend full access as the default setup.
 
 If Codex asks whether to trust the project configuration, inspect `.codex/config.toml` and trust it only when it matches this narrow profile. If the permissions selector offers `Custom (config.toml)`, select it.
 
@@ -200,13 +200,13 @@ If the real Automation reports `transient_network_error` or `fetch failed`, diag
 node scripts/check_once.mjs --diagnose-network --json
 ```
 
-`dns.ok=false` or `http.reached=false` means the runtime cannot reach `apitest.dayclaw.com`; allow outbound HTTPS before debugging LLM behavior. Do not ask for full filesystem access merely to solve network reachability.
+`dns.ok=false` or `http.reached=false` means the runtime cannot reach `api.dayclaw.com`; allow outbound HTTPS before debugging LLM behavior. Do not ask for full filesystem access merely to solve network reachability.
 
 ### 6. Create a Codex Automation
 
 Use the **full contents** of `references/automation-prompt.md` as the Automation prompt. Keep that prompt thin; this skill contains the processing rules. The default cadence is hourly because reset posts are usually advance notices rather than instant events.
 
-Use the project-level `.codex/config.toml` profile `codex-reset-watchdog-net`: write access to the current workspace plus outbound HTTPS to `apitest.dayclaw.com`. The script reads `env` / `.env`, writes `var/state.json`, and calls the Dayclaw public source; it does not require full filesystem access.
+Use the project-level `.codex/config.toml` profile `codex-reset-watchdog-net`: write access to the current workspace plus outbound HTTPS to `api.dayclaw.com`. The script reads `env` / `.env`, writes `var/state.json`, and calls the Dayclaw public source; it does not require full filesystem access.
 
 The Automation should run:
 
@@ -267,4 +267,4 @@ Suppress examples:
 - Keep the script as a fact collector, not a semantic classifier. The LLM should be the judge.
 - Keep `STATE_FILE_PATH` persistent across automation runs. Prefer the default `var/state.json` unless the Automation environment can write the custom path.
 - Use `--diagnose-network --json` for repeated `fetch failed` errors. It separates network reachability from API/content issues.
-- Do not recommend full access as the default fix. The minimum needed permissions are workspace write plus outbound HTTPS to `apitest.dayclaw.com`.
+- Do not recommend full access as the default fix. The minimum needed permissions are workspace write plus outbound HTTPS to `api.dayclaw.com`.

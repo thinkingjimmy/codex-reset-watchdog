@@ -61,7 +61,7 @@ async function main() {
     assert.equal(candidates[0].id, "100");
     assert.equal(candidates[2].text, "yes, later today");
     assert.equal(itemsFromPayload({ data: { items: [high] } }).length, 1);
-    assert.equal(buildDayclawItemsUrl({ handle: "@target" }), "https://apitest.dayclaw.com/api/source/public/x/target/items");
+    assert.equal(buildDayclawItemsUrl({ handle: "@target" }), "https://api.dayclaw.com/api/source/public/x/target/items");
 
     const normalized = normalizeSourceItem(high);
     assert.equal(normalized.author_username, "target");
@@ -114,7 +114,7 @@ async function main() {
     assert.equal(shouldReportOperationalFailure(4, 3, 24), false);
     assert.equal(shouldReportOperationalFailure(27, 3, 24), true);
     assert.equal(parseArgs(["--diagnose-network"]).diagnoseNetwork, true);
-    assert.equal(parseArgs(["--handle", "target"]).sourceUrl, "https://apitest.dayclaw.com/api/source/public/x/target/items");
+    assert.equal(parseArgs(["--handle", "target"]).sourceUrl, "https://api.dayclaw.com/api/source/public/x/target/items");
     assert.equal(parseArgs(["--source-url", "https://example.test/items"]).sourceUrl, "https://example.test/items");
 
     console.log("self_test passed");

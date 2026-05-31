@@ -6,7 +6,7 @@ import path from "node:path";
 import process from "node:process";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-export const DAYCLAW_ITEMS_BASE_URL = "https://apitest.dayclaw.com/api/source/public/x";
+export const DAYCLAW_ITEMS_BASE_URL = "https://api.dayclaw.com/api/source/public/x";
 export const DEFAULT_TARGET_X_HANDLE = "thsottiaux";
 export const DEFAULT_STATE_FILE_PATH = "var/state.json";
 export const NETWORK_FAILURE_KEY = "dayclaw_network";
@@ -373,7 +373,7 @@ export async function diagnoseNetwork({ sourceUrl, timeout = 10 }) {
   diagnostic.network_ok = Boolean(diagnostic.dns.ok && diagnostic.http.reached);
   diagnostic.hint = diagnostic.network_ok
     ? "Network reaches the Dayclaw public source. If the main check still fails, inspect HTTP status, source URL, and api_pages."
-    : "This environment cannot reach apitest.dayclaw.com. In Codex, use the project codex-reset-watchdog-net permission profile or otherwise allow outbound HTTPS to this host; full filesystem access is not required.";
+    : "This environment cannot reach api.dayclaw.com. In Codex, use the project codex-reset-watchdog-net permission profile or otherwise allow outbound HTTPS to this host; full filesystem access is not required.";
   return diagnostic;
 }
 

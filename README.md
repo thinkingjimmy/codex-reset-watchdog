@@ -7,7 +7,7 @@ A zero-dependency Codex skill repo for monitoring [`@thsottiaux`](https://x.com/
 ## What It Does
 
 - Gives users a one-prompt setup flow: Codex installs the skill from GitHub, validates it, primes state, and creates an hourly Automation.
-- Works without a paid API key: the default source is `https://apitest.dayclaw.com/api/source/public/x/thsottiaux/items`.
+- Works without a paid API key: the default source is `https://api.dayclaw.com/api/source/public/x/thsottiaux/items`.
 - Gives the LLM the full new batch: every unseen item is reviewed, reducing rule prefilter misses.
 - Stays quiet when nothing matters: no reset/refill/restored-allowance signal means no finding.
 - Avoids repeat noise: the same item is handled once, while future new posts remain eligible.
@@ -60,7 +60,7 @@ After installation:
    - working directory: the installed codex-reset-watchdog folder
    - command: node scripts/check_once.mjs --json
    - prompt: use the full contents of references/automation-prompt.md exactly; it is a thin launcher that tells Automation to use the skill
-   - permissions: use the project .codex/config.toml profile codex-reset-watchdog-net if available; otherwise grant only workspace write plus outbound HTTPS to apitest.dayclaw.com
+   - permissions: use the project .codex/config.toml profile codex-reset-watchdog-net if available; otherwise grant only workspace write plus outbound HTTPS to api.dayclaw.com
 6. When calling the Codex Automation creation tool, do not guess its parameter shape:
    - inspect the tool schema or an existing Automation config first;
    - use the current tool's accepted hourly schedule format, preferably an iCalendar RRULE with DTSTART if plain "hourly" is rejected;
@@ -75,7 +75,7 @@ Do not paste raw JSON unless I ask for it. Do not enable full access unless the 
 There is no API key to buy or paste. The default source is:
 
 ```text
-https://apitest.dayclaw.com/api/source/public/x/thsottiaux/items
+https://api.dayclaw.com/api/source/public/x/thsottiaux/items
 ```
 
 Codex will verify the script, prime the current public items as the baseline, then create the scheduled Automation using the full contents of [`references/automation-prompt.md`](references/automation-prompt.md). That prompt is intentionally small; [`SKILL.md`](SKILL.md) is the runtime source of truth, and [`references/llm-judge-rubric.md`](references/llm-judge-rubric.md) is the reset judgment rubric.
@@ -132,14 +132,14 @@ STATE_FILE_PATH=var/state.json
 - `operational_error`: present for transient/network/runtime failures; report only when instructed by the Automation prompt.
 - `results`: per-item handling details such as `queued_for_llm`, `already_seen`, or `ignored_reply`.
 
-Transient DNS failures for `apitest.dayclaw.com` are retried inside the same run. If all retries fail, the script exits cleanly with `status: "transient_network_error"` so one-off network blips do not spam Triage.
+Transient DNS failures for `api.dayclaw.com` are retried inside the same run. If all retries fail, the script exits cleanly with `status: "transient_network_error"` so one-off network blips do not spam Triage.
 
 ## Public Source Notes
 
 The Dayclaw endpoint currently returns a fixed public batch of recent items:
 
 ```text
-https://apitest.dayclaw.com/api/source/public/x/thsottiaux/items
+https://api.dayclaw.com/api/source/public/x/thsottiaux/items
 ```
 
 Runtime behavior:
@@ -155,9 +155,9 @@ This skill has a small permission footprint:
 
 - read `env` / `.env` in the current project;
 - write `var/state.json` in the current project;
-- make HTTPS requests to `https://apitest.dayclaw.com`.
+- make HTTPS requests to `https://api.dayclaw.com`.
 
-The repo includes the recommended configuration in `.codex/config.toml`. It defines `codex-reset-watchdog-net`, which allows workspace writes and only the `apitest.dayclaw.com` network destination:
+The repo includes the recommended configuration in `.codex/config.toml`. It defines `codex-reset-watchdog-net`, which allows workspace writes and only the `api.dayclaw.com` network destination:
 
 ```toml
 default_permissions = "codex-reset-watchdog-net"
@@ -172,7 +172,7 @@ default_permissions = "codex-reset-watchdog-net"
 enabled = true
 
 [permissions.codex-reset-watchdog-net.network.domains]
-"apitest.dayclaw.com" = "allow"
+"api.dayclaw.com" = "allow"
 ```
 
 The first time you open this project in Codex, if Codex asks whether to trust the project configuration, inspect `.codex/config.toml` and trust it only after confirming it contains the narrow profile above. If the permissions selector offers `Custom (config.toml)`, select it.
@@ -189,13 +189,13 @@ If Automation returns `status: "transient_network_error"`, `root_cause: "connect
 node scripts/check_once.mjs --diagnose-network --json
 ```
 
-This checks DNS resolution and HTTPS reachability for `apitest.dayclaw.com`. If `dns.ok=false` or `http.reached=false`, the failure is in the runtime environment's outbound network, not item content, LLM judgment, or state dedupe. Allow outbound HTTPS to `https://apitest.dayclaw.com` for the Automation runtime instead of broadening filesystem permissions.
+This checks DNS resolution and HTTPS reachability for `api.dayclaw.com`. If `dns.ok=false` or `http.reached=false`, the failure is in the runtime environment's outbound network, not item content, LLM judgment, or state dedupe. Allow outbound HTTPS to `https://api.dayclaw.com` for the Automation runtime instead of broadening filesystem permissions.
 
 If `network_ok=true` but the normal check still fails, inspect `source_url`, `api_pages`, and `api_warning`.
 
 ## Links
 
 - Target profile: <https://x.com/thsottiaux>
-- Dayclaw public source: <https://apitest.dayclaw.com/api/source/public/x/thsottiaux/items>
+- Dayclaw public source: <https://api.dayclaw.com/api/source/public/x/thsottiaux/items>
 - Codex Skills docs: <https://developers.openai.com/codex/skills>
 - Codex Automations docs: <https://developers.openai.com/codex/app/automations>

@@ -7,7 +7,7 @@
 ## 功能
 
 - 一段 prompt 完成 setup：Codex 从 GitHub 安装 skill、跑基础验证、初始化 state，并创建 hourly Automation。
-- 不需要付费 API key：默认 source 是 `https://apitest.dayclaw.com/api/source/public/x/thsottiaux/items`。
+- 不需要付费 API key：默认 source 是 `https://api.dayclaw.com/api/source/public/x/thsottiaux/items`。
 - 判断更像人：Codex Automation LLM 会审阅所有新 item，减少规则预筛带来的漏判。
 - 只在值得注意时打扰：没有 reset / refill / restored allowance 信号时不发 Triage、不写 routine memory。
 - 不重复提醒：同一个 item 只处理一次，后续新消息仍可继续触发。
@@ -60,7 +60,7 @@ https://github.com/thinkingjimmy/codex-reset-watchdog
    - working directory：已安装的 codex-reset-watchdog 目录
    - command：node scripts/check_once.mjs --json
    - prompt：完整使用 references/automation-prompt.md，不要自由改写；它只是让 Automation 使用 skill 的薄启动器
-   - permissions：优先使用项目 .codex/config.toml 里的 codex-reset-watchdog-net；否则只授予 workspace write 和到 apitest.dayclaw.com 的 outbound HTTPS
+   - permissions：优先使用项目 .codex/config.toml 里的 codex-reset-watchdog-net；否则只授予 workspace write 和到 api.dayclaw.com 的 outbound HTTPS
 6. 调用 Codex Automation 创建工具时，不要猜参数形态：
    - 先查看工具 schema 或现有 Automation config；
    - 使用当前工具接受的 hourly schedule 格式；如果普通 "hourly" 被拒，就用带 DTSTART 的 iCalendar RRULE；
@@ -75,7 +75,7 @@ https://github.com/thinkingjimmy/codex-reset-watchdog
 不需要申请 API key。默认 source 是：
 
 ```text
-https://apitest.dayclaw.com/api/source/public/x/thsottiaux/items
+https://api.dayclaw.com/api/source/public/x/thsottiaux/items
 ```
 
 Codex 会先验证脚本能跑，再把当前已有 public items 标记为基线，最后用 [`references/automation-prompt.md`](references/automation-prompt.md) 的完整内容创建定时 Automation。这个 prompt 很薄；真正的运行规则在 [`SKILL.md`](SKILL.md)，reset 判断标准在 [`references/llm-judge-rubric.md`](references/llm-judge-rubric.md)。没有 reset 信号时不会发 Triage finding。
@@ -134,14 +134,14 @@ STATE_FILE_PATH=var/state.json
 - `operational_error`：网络或运行错误；是否报警由 Automation prompt 决定。
 - `results`：每条 item 的处理细节，例如 `queued_for_llm`、`already_seen`、`ignored_reply`。
 
-`apitest.dayclaw.com` 的 DNS 抖动会在同一轮内自动重试。如果重试后仍失败，脚本会输出 `status: "transient_network_error"` 并正常退出，避免一次网络抖动就刷 Triage。
+`api.dayclaw.com` 的 DNS 抖动会在同一轮内自动重试。如果重试后仍失败，脚本会输出 `status: "transient_network_error"` 并正常退出，避免一次网络抖动就刷 Triage。
 
 ## Public Source 说明
 
 Dayclaw endpoint 当前返回固定数量的公开最近 items：
 
 ```text
-https://apitest.dayclaw.com/api/source/public/x/thsottiaux/items
+https://api.dayclaw.com/api/source/public/x/thsottiaux/items
 ```
 
 运行逻辑是：
@@ -157,9 +157,9 @@ https://apitest.dayclaw.com/api/source/public/x/thsottiaux/items
 
 - 读取当前项目里的 `env` / `.env`。
 - 写入当前项目里的 `var/state.json`。
-- 通过 HTTPS 访问 `https://apitest.dayclaw.com`。
+- 通过 HTTPS 访问 `https://api.dayclaw.com`。
 
-仓库已经内置推荐配置：`.codex/config.toml`。它定义了 `codex-reset-watchdog-net`，只给当前 workspace 写入权限，并且只放行 `apitest.dayclaw.com`：
+仓库已经内置推荐配置：`.codex/config.toml`。它定义了 `codex-reset-watchdog-net`，只给当前 workspace 写入权限，并且只放行 `api.dayclaw.com`：
 
 ```toml
 default_permissions = "codex-reset-watchdog-net"
@@ -174,7 +174,7 @@ default_permissions = "codex-reset-watchdog-net"
 enabled = true
 
 [permissions.codex-reset-watchdog-net.network.domains]
-"apitest.dayclaw.com" = "allow"
+"api.dayclaw.com" = "allow"
 ```
 
 第一次用 Codex 打开这个项目时，如果 Codex 提示是否信任项目配置，请先查看 `.codex/config.toml`，确认只包含上面的最小权限后再信任。如果权限选择器里有 `Custom (config.toml)`，请选择它。
@@ -191,13 +191,13 @@ enabled = true
 node scripts/check_once.mjs --diagnose-network --json
 ```
 
-这个命令会检查 `apitest.dayclaw.com` 的 DNS 解析和 HTTPS 触达能力。如果 `dns.ok=false` 或 `http.reached=false`，问题在运行环境的出站网络，不是 item 内容、LLM 判断或 state 去重。解决方式是给 Automation runtime 放行到 `https://apitest.dayclaw.com` 的出站 HTTPS，而不是扩大文件系统权限。
+这个命令会检查 `api.dayclaw.com` 的 DNS 解析和 HTTPS 触达能力。如果 `dns.ok=false` 或 `http.reached=false`，问题在运行环境的出站网络，不是 item 内容、LLM 判断或 state 去重。解决方式是给 Automation runtime 放行到 `https://api.dayclaw.com` 的出站 HTTPS，而不是扩大文件系统权限。
 
 如果 `network_ok=true` 但正式检查仍失败，再检查 `source_url`、`api_pages` 和 `api_warning`。
 
 ## 链接
 
 - 目标账号：<https://x.com/thsottiaux>
-- Dayclaw public source：<https://apitest.dayclaw.com/api/source/public/x/thsottiaux/items>
+- Dayclaw public source：<https://api.dayclaw.com/api/source/public/x/thsottiaux/items>
 - Codex Skills 文档：<https://developers.openai.com/codex/skills>
 - Codex Automations 文档：<https://developers.openai.com/codex/app/automations>

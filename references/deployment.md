@@ -19,7 +19,7 @@ TARGET_X_HANDLE=thsottiaux
 DAYCLAW_SOURCE_ITEMS_URL=
 ```
 
-The full profile URL is `https://x.com/thsottiaux`. The default public source is `https://apitest.dayclaw.com/api/source/public/x/thsottiaux/items`.
+The full profile URL is `https://x.com/thsottiaux`. The default public source is `https://api.dayclaw.com/api/source/public/x/thsottiaux/items`.
 
 ## What should be committed
 
@@ -74,7 +74,7 @@ Dry-run checks are useful for API reading and JSON parsing, but they do not prov
 
 ## Runtime command
 
-Use the project-level `.codex/config.toml` profile `codex-reset-watchdog-net`. This runtime needs write access to the current workspace and outbound HTTPS to `apitest.dayclaw.com`; it does not require full filesystem access.
+Use the project-level `.codex/config.toml` profile `codex-reset-watchdog-net`. This runtime needs write access to the current workspace and outbound HTTPS to `api.dayclaw.com`; it does not require full filesystem access.
 
 If the Codex UI only lets local shell commands reach the network after enabling full access, treat that as a runtime permission limitation. The project itself still only needs workspace write plus network egress, so full access should be a temporary fallback rather than the recommended setup.
 
@@ -132,7 +132,7 @@ DAYCLAW_SOURCE_ITEMS_URL=
 When the override is blank, the script derives:
 
 ```text
-https://apitest.dayclaw.com/api/source/public/x/thsottiaux/items
+https://api.dayclaw.com/api/source/public/x/thsottiaux/items
 ```
 
 The endpoint currently returns a fixed public batch of recent items. The script dedupes locally by stable tweet/item ID. This removes paid API key setup and keeps the runtime small, but it also means the script should not pretend to have full thread hydration or arbitrary pagination.
@@ -154,7 +154,7 @@ default_permissions = "codex-reset-watchdog-net"
 enabled = true
 
 [permissions.codex-reset-watchdog-net.network.domains]
-"apitest.dayclaw.com" = "allow"
+"api.dayclaw.com" = "allow"
 ```
 
 This is the preferred alternative to full access. It keeps filesystem access scoped to the workspace while allowing the one network destination the runtime needs.
@@ -218,8 +218,8 @@ node scripts/check_once.mjs --diagnose-network --json
 
 Interpretation:
 
-- `dns.ok=false`: the runtime cannot resolve `apitest.dayclaw.com`.
-- `http.reached=false`: DNS may work, but outbound HTTPS to `apitest.dayclaw.com` is blocked or timing out.
+- `dns.ok=false`: the runtime cannot resolve `api.dayclaw.com`.
+- `http.reached=false`: DNS may work, but outbound HTTPS to `api.dayclaw.com` is blocked or timing out.
 - `network_ok=true`: network reachability is not the blocker; inspect `source_url`, `api_pages`, and `api_warning`.
 
 Useful knobs:
@@ -240,6 +240,6 @@ Do not write automation memory for routine successful no-op runs. After state is
 ## Useful links
 
 - Target profile: https://x.com/thsottiaux
-- Dayclaw public source: https://apitest.dayclaw.com/api/source/public/x/thsottiaux/items
+- Dayclaw public source: https://api.dayclaw.com/api/source/public/x/thsottiaux/items
 - Codex skills docs: https://developers.openai.com/codex/skills
 - Codex automations docs: https://developers.openai.com/codex/app/automations

@@ -2,30 +2,24 @@
 
 This repo is designed to be GitHub-safe and easy for a user to run.
 
-## What the user edits
+## User-facing setup
 
-Users should edit only their local `env` or `.env` file. Prefer `env` for beginner-facing setup because it is visible in Finder:
+The intended user flow is one copied prompt from `README.md` / `README.zh-CN.md`. Codex should install this skill from:
 
-1. Open the folder in VS Code.
-2. Duplicate `env.example`.
-3. Rename the copy to `env`.
-4. Replace only the API key placeholder.
-
-Then replace:
-
-```env
-TWITTERAPI_IO_KEY=PASTE_YOUR_TWITTERAPI_IO_KEY_HERE
+```text
+https://github.com/thinkingjimmy/codex-reset-watchdog
 ```
 
-with their real TwitterAPI.io key.
+Then Codex should run setup checks, prime state, create an hourly Automation, and summarize the result in human language. Users only need a local `env` or `.env` file when they want to override defaults.
 
 The target account is already set:
 
 ```env
 TARGET_X_HANDLE=thsottiaux
+DAYCLAW_SOURCE_ITEMS_URL=
 ```
 
-The full profile URL is `https://x.com/thsottiaux`, but the local env file should contain only the handle.
+The full profile URL is `https://x.com/thsottiaux`. The default public source is `https://apitest.dayclaw.com/api/source/public/x/thsottiaux/items`.
 
 ## What should be committed
 
@@ -34,7 +28,6 @@ Commit these files:
 ```text
 env.example
 .codex/config.toml
-.codex/README.md
 .codex/rules/codex-reset-watchdog.rules
 .gitignore
 README.md
@@ -59,9 +52,9 @@ var/
 
 `.gitignore` is already configured for this.
 
-## Install and test
+## Validate the installed folder
 
-There is no install step. Codex should run this setup check for the user when possible:
+There is no npm, Python, or build install step. After Codex installs or clones the skill repo, it should run this setup check for the user:
 
 ```bash
 node scripts/self_test.mjs
@@ -75,36 +68,56 @@ Run once before enabling the schedule:
 node scripts/check_once.mjs --prime-state --json
 ```
 
-This prevents old tweets/replies from becoming new Codex Triage findings.
+This prevents old public source items from becoming new Codex Triage findings.
 
 Dry-run checks are useful for API reading and JSON parsing, but they do not prove state writes. The scheduled Automation writes `seen_tweets` and `operational_failures`, so keep the default `STATE_FILE_PATH=var/state.json` in sandboxed Codex runs.
 
 ## Runtime command
 
-Use the project-level `.codex/config.toml` profile `codex-reset-watchdog-net`. This runtime needs write access to the current workspace and outbound HTTPS to `api.twitterapi.io`; it does not require full filesystem access.
+Use the project-level `.codex/config.toml` profile `codex-reset-watchdog-net`. This runtime needs write access to the current workspace and outbound HTTPS to `apitest.dayclaw.com`; it does not require full filesystem access.
 
 If the Codex UI only lets local shell commands reach the network after enabling full access, treat that as a runtime permission limitation. The project itself still only needs workspace write plus network egress, so full access should be a temporary fallback rather than the recommended setup.
 
-Codex Automation should run:
+Codex Automation should run hourly:
 
 ```bash
-node scripts/check_once.mjs --include-replies true --hydrate-reply-context true --json
+node scripts/check_once.mjs --json
 ```
 
-Recommended cadence: every 30-60 minutes.
+Setup-only commands are `node scripts/self_test.mjs`, `node scripts/check_once.mjs --prime-state --json`, and `node scripts/check_once.mjs --dry-run --json`. Do not run them on every schedule.
 
-## Credit control
+## Run summary behavior
 
-Default scheduled monitoring uses Advanced Search with an incremental time window:
+Codex Automations may use the same prompt for the Test button and scheduled runs. Because the prompt cannot reliably distinguish them, every run should end with an LLM summary rather than raw JSON.
+
+A healthy no-op run after priming should say:
+
+```text
+Codex Reset Watchdog is healthy.
+- Dayclaw public source is reachable.
+- State is persistent at var/state.json.
+- No new public items were found since the primed baseline.
+- No Codex usage/quota/rate-limit reset signal was reported.
+```
+
+Healthy no-op runs should not create Triage findings, external notifications, or routine automation memory. The concise summary is safe for Automation run logs and Test results.
+
+## Public source model
+
+Default scheduled monitoring uses the Dayclaw public source:
 
 ```env
-FETCH_STRATEGY=advanced_search
-INCREMENTAL_OVERLAP_SECONDS=300
-INCREMENTAL_BOOTSTRAP_LOOKBACK_SECONDS=7200
-CHECK_ONCE_MAX_PAGES=1
+TARGET_X_HANDLE=thsottiaux
+DAYCLAW_SOURCE_ITEMS_URL=
 ```
 
-This is deliberate. TwitterAPI.io documents that `last_tweets` returns up to 20 tweets per page and is costly for frequent single-account monitoring. The advanced-search strategy stores a checkpoint in `STATE_FILE_PATH` and searches only the window since the last successful run. Keep `FETCH_STRATEGY=last_tweets` only as a compatibility fallback.
+When the override is blank, the script derives:
+
+```text
+https://apitest.dayclaw.com/api/source/public/x/thsottiaux/items
+```
+
+The endpoint currently returns a fixed public batch of recent items. The script dedupes locally by stable tweet/item ID. This removes paid API key setup and keeps the runtime small, but it also means the script should not pretend to have full thread hydration or arbitrary pagination.
 
 ## Codex permission profile
 
@@ -123,7 +136,7 @@ default_permissions = "codex-reset-watchdog-net"
 enabled = true
 
 [permissions.codex-reset-watchdog-net.network.domains]
-"api.twitterapi.io" = "allow"
+"apitest.dayclaw.com" = "allow"
 ```
 
 This is the preferred alternative to full access. It keeps filesystem access scoped to the workspace while allowing the one network destination the runtime needs.
@@ -148,9 +161,9 @@ Use the default persistent state file path:
 STATE_FILE_PATH=var/state.json
 ```
 
-`var/` is ignored by git and writable in Codex sandboxed runs. If the file is deleted, the script loses dedupe memory and may reprocess old tweets. If you set a custom home-directory path and Codex cannot write it, the script falls back to `var/state.json` and reports that in the `state` field.
+`var/` is ignored by git and writable in Codex sandboxed runs. If the file is deleted, the script loses dedupe memory and may reprocess old items. If you set a custom home-directory path and Codex cannot write it, the script falls back to `var/state.json` and reports that in the `state` field.
 
-State contains both `seen_tweets` for dedupe and `checkpoints` for incremental search windows.
+State contains `seen_tweets` for dedupe and `operational_failures` for repeated transient network errors.
 
 ## Lifecycle
 
@@ -158,26 +171,26 @@ The Automation should keep running after a finding.
 
 Expected behavior:
 
-1. New tweet/reply appears.
-2. Script outputs it in `review_items` with any fetched reply context.
+1. New public source item appears.
+2. Script outputs it in `review_items`.
 3. Codex Automation LLM judges whether it signals a Codex reset/refill/restored allowance/remediation.
 4. Automation posts a Triage finding only for positive judgments.
-5. Script records the tweet ID in the JSON state file.
-6. Later runs ignore the same tweet.
-7. A future tweet/reply with a new tweet ID can still produce a new finding.
+5. Script records the item ID in the JSON state file.
+6. Later runs ignore the same item.
+7. A future item with a new ID can still produce a new finding.
 
 ## Failure handling
 
 Report a Codex Triage finding when:
 
 - `check_once.mjs` exits non-zero;
-- TwitterAPI.io returns an authentication or API error;
+- Dayclaw returns an API error;
 - JSON `status` is `error`;
 - JSON `status` is `transient_network_error` and `operational_error.report_to_triage` is true;
-- repeated thread-context errors are likely causing missed detections;
+- JSON `api_warning` is present;
 - JSON output cannot be parsed.
 
-Do not report one-off DNS/network failures. The script retries transient TwitterAPI.io connection failures inside the same run, then records consecutive failures in `STATE_FILE_PATH`.
+Do not report one-off DNS/network failures. The script retries transient Dayclaw connection failures inside the same run, then records consecutive failures in `STATE_FILE_PATH`.
 
 For repeated `fetch failed` or `connection_error` results, diagnose the network path from the same working directory:
 
@@ -187,31 +200,28 @@ node scripts/check_once.mjs --diagnose-network --json
 
 Interpretation:
 
-- `dns.ok=false`: the runtime cannot resolve `api.twitterapi.io`.
-- `http.reached=false`: DNS may work, but outbound HTTPS to `api.twitterapi.io` is blocked or timing out.
-- `network_ok=true`: network reachability is not the blocker; inspect API key, target handle/userId, and `api_pages` / `api_warning`.
+- `dns.ok=false`: the runtime cannot resolve `apitest.dayclaw.com`.
+- `http.reached=false`: DNS may work, but outbound HTTPS to `apitest.dayclaw.com` is blocked or timing out.
+- `network_ok=true`: network reachability is not the blocker; inspect `source_url`, `api_pages`, and `api_warning`.
 
 Useful knobs:
 
 ```env
-TWITTERAPI_IO_RETRY_ATTEMPTS=3
-TWITTERAPI_IO_RETRY_SLEEP_SECONDS=5
-TWITTERAPI_IO_RETRY_MAX_SLEEP_SECONDS=30
+DAYCLAW_RETRY_ATTEMPTS=3
+DAYCLAW_RETRY_SLEEP_SECONDS=5
+DAYCLAW_RETRY_MAX_SLEEP_SECONDS=30
 TRANSIENT_NETWORK_ERRORS_EXIT_ZERO=true
 OPERATIONAL_ERROR_REPORT_THRESHOLD=3
 OPERATIONAL_ERROR_REPORT_EVERY_FAILURES=24
 ```
 
-Do not report when there are simply no new tweets, no positive LLM judgments, or a non-reportable transient network status. Transient network errors report on the threshold failure, then only every `OPERATIONAL_ERROR_REPORT_EVERY_FAILURES` failures while the outage continues.
+Do not report scheduled findings when there are simply no new items, no positive LLM judgments, or a non-reportable transient network status. Transient network errors report on the threshold failure, then only every `OPERATIONAL_ERROR_REPORT_EVERY_FAILURES` failures while the outage continues.
 
-Do not write automation memory for routine successful no-op runs. After state is primed, repeated output such as `status=ok`, `fetched=40`, `new_items=0`, and `review_count=0` is expected and should be silently archived.
+Do not write automation memory for routine successful no-op runs. After state is primed, repeated output such as `status=ok`, `new_items=0`, and `review_count=0` is expected and should produce only the concise run summary, with no Triage finding.
 
 ## Useful links
 
 - Target profile: https://x.com/thsottiaux
-- TwitterAPI.io docs: https://docs.twitterapi.io/introduction
-- TwitterAPI.io authentication: https://docs.twitterapi.io/authentication
-- TwitterAPI.io last tweets endpoint: https://docs.twitterapi.io/api-reference/endpoint/get_user_last_tweets
-- TwitterAPI.io thread context endpoint: https://docs.twitterapi.io/api-reference/endpoint/get_tweet_thread_context
+- Dayclaw public source: https://apitest.dayclaw.com/api/source/public/x/thsottiaux/items
 - Codex skills docs: https://developers.openai.com/codex/skills
 - Codex automations docs: https://developers.openai.com/codex/app/automations

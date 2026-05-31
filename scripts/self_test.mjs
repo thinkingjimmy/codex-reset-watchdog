@@ -1,11 +1,4 @@
 #!/usr/bin/env node
-/**
- * - [INPUT]: 依赖 check_once.mjs 导出的 tweet 规范化、上下文拼接、状态存储和候选批处理能力。
- * - [OUTPUT]: 对外提供零网络本地 self_test，证明所有新 tweet/reply 都进入 LLM-first review_items。
- * - [POS]: scripts 的回归哨兵，防止运行入口退回规则先筛的旧路径。
- * - [PROTOCOL]: 变更时更新此头部，然后检查 README.md
- */
-
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
@@ -14,104 +7,96 @@ import path from "node:path";
 import {
   DEFAULT_STATE_FILE_PATH,
   DedupeStore,
-  attachThreadContext,
-  buildAdvancedSearchQuery,
+  buildDayclawItemsUrl,
   buildReviewItem,
   eventKeyForTweet,
-  extractTweets,
-  incrementalWindowFromCheckpoint,
+  extractItems,
+  itemsFromPayload,
+  normalizeSourceItem,
   parseArgs,
   processCandidates,
   shouldReportOperationalFailure,
-  tweetsFromPayload,
 } from "./check_once.mjs";
 
 async function main() {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "codex-reset-watchdog-"));
   try {
     const high = {
-      id: "100",
-      text: "Heads up, we'll reset Codex usage limits later today.",
-      author: { userName: "target" },
-      conversationId: "100",
+      id: "item-100",
+      external_id: "100",
+      title: "Heads up, we'll reset Codex usage limits later today.",
+      content: "Heads up, we'll reset Codex usage limits later today.",
+      author: "target",
+      url: "https://x.com/target/status/100",
+      published_at: "2026-05-30T10:00:00",
+      metadata: { is_reply: false, author_user_name: "target", raw_author_name: "Tibo" },
     };
     const falsePositive = {
-      id: "101",
-      text: "git reset fixed my Codex branch.",
-      author: { userName: "target" },
-      conversationId: "101",
+      id: "item-101",
+      external_id: "101",
+      content: "git reset fixed my Codex branch.",
+      author: "target",
+      url: "https://x.com/target/status/101",
+      published_at: "2026-05-30T10:01:00",
+      metadata: { is_reply: false, author_user_name: "target" },
     };
     const reply = {
-      id: "200",
-      text: "yes, later today",
-      author: { userName: "target" },
-      isReply: true,
-      conversationId: "150",
-      inReplyToId: "150",
+      id: "item-200",
+      external_id: "200",
+      content: "yes, later today",
+      author: "target",
+      url: "https://x.com/target/status/200",
+      published_at: "2026-05-30T10:02:00",
+      metadata: { is_reply: true, author_user_name: "target" },
     };
 
-    const candidates = extractTweets({ tweets: [high, falsePositive, reply] });
+    const payload = {
+      source: { name: "@target", user_name: "target", source_url: "https://x.com/target" },
+      items: [high, falsePositive, reply],
+      limit: 10,
+    };
+    const candidates = extractItems(payload);
     assert.equal(candidates.length, 3);
-    assert.equal(eventKeyForTweet(candidates[2]), "150");
-    assert.equal(tweetsFromPayload({ data: { tweets: [high] } }).length, 1);
-    assert.equal(tweetsFromPayload({ result: { items: [falsePositive] } }).length, 1);
-    assert.equal(
-      buildAdvancedSearchQuery({ handle: "@target", includeReplies: true, sinceTime: 10, untilTime: 20 }),
-      "from:target since_time:10 until_time:20",
-    );
-    assert.equal(
-      buildAdvancedSearchQuery({ handle: "target", includeReplies: false, sinceTime: 10, untilTime: 20 }),
-      "from:target since_time:10 until_time:20 -filter:replies",
-    );
-    assert.deepEqual(
-      incrementalWindowFromCheckpoint({ last_successful_check_at: 1000 }, { now: 2000, overlapSeconds: 300, bootstrapLookbackSeconds: 7200 }),
-      { sinceTime: 700, untilTime: 2000, lastSuccessful: 1000 },
-    );
+    assert.equal(candidates[0].id, "100");
+    assert.equal(candidates[2].text, "yes, later today");
+    assert.equal(itemsFromPayload({ data: { items: [high] } }).length, 1);
+    assert.equal(buildDayclawItemsUrl({ handle: "@target" }), "https://apitest.dayclaw.com/api/source/public/x/target/items");
 
-    const replyWithContext = attachThreadContext(candidates[2], [
-      { id: "150", text: "Will you reset Codex usage limits for affected users?", author: { userName: "someone" } },
-      { id: "200", text: "yes, later today", author: { userName: "target" } },
-    ]);
-    const reviewItem = buildReviewItem(replyWithContext, { contextStatus: "used", contextItems: 2 });
-    assert.match(reviewItem.reply_context, /reset Codex usage limits/);
+    const normalized = normalizeSourceItem(high);
+    assert.equal(normalized.author_username, "target");
+    assert.equal(eventKeyForTweet(normalized), "100");
+    assert.equal(buildReviewItem(normalizeSourceItem(reply)).context_status, "not_available_in_public_feed");
 
     const store = new DedupeStore(path.join(tmp, "state.json"));
     const result = await processCandidates(candidates, {
       store,
-      args: {
-        dryRun: false,
-        hydrateReplyContext: true,
-        threadContextMaxFetches: 12,
-        threadContextMaxPages: 1,
-      },
-      fetchThreadContextImpl: async () => [
-        { id: "150", text: "Will you reset Codex usage limits for affected users?", author: { userName: "someone" } },
-        { id: "200", text: "yes, later today", author: { userName: "target" } },
-      ],
+      args: { dryRun: false, includeReplies: true },
     });
     assert.equal(result.reviewItems.length, 3);
-    assert.equal(result.reviewItems[0].text, high.text);
-    assert.equal(result.reviewItems[1].text, falsePositive.text);
-    assert.equal(result.reviewItems[2].reply_context.includes("reset Codex usage limits"), true);
+    assert.equal(result.reviewItems[0].text, high.content);
+    assert.equal(result.reviewItems[1].text, falsePositive.content);
+    assert.equal(result.reviewItems[2].is_reply, true);
     assert.equal(result.results.every((row) => row.status === "queued_for_llm"), true);
 
     const deduped = await processCandidates(candidates, {
       store,
-      args: {
-        dryRun: false,
-        hydrateReplyContext: true,
-        threadContextMaxFetches: 12,
-        threadContextMaxPages: 1,
-      },
-      fetchThreadContextImpl: async () => [],
+      args: { dryRun: false, includeReplies: true },
     });
     assert.equal(deduped.reviewItems.length, 0);
     assert.equal(deduped.results.every((row) => row.status === "already_seen"), true);
 
-    const failure = store.recordOperationalFailure("twitterapi_network", { root_cause: "dns_resolution_failure" });
+    const noRepliesStore = new DedupeStore(path.join(tmp, "no-replies-state.json"));
+    const noReplies = await processCandidates(candidates, {
+      store: noRepliesStore,
+      args: { dryRun: true, includeReplies: false },
+    });
+    assert.equal(noReplies.reviewItems.length, 2);
+    assert.equal(noReplies.results.at(-1).status, "ignored_reply");
+
+    const failure = store.recordOperationalFailure("dayclaw_network", { root_cause: "dns_resolution_failure" });
     assert.equal(failure.count, 1);
-    store.clearOperationalFailure("twitterapi_network");
-    assert.equal(store.load().operational_failures.twitterapi_network, undefined);
+    store.clearOperationalFailure("dayclaw_network");
+    assert.equal(store.load().operational_failures.dayclaw_network, undefined);
 
     const blockedParent = path.join(tmp, "not-a-directory");
     fs.writeFileSync(blockedParent, "file blocks directory creation", "utf8");
@@ -127,7 +112,8 @@ async function main() {
     assert.equal(shouldReportOperationalFailure(4, 3, 24), false);
     assert.equal(shouldReportOperationalFailure(27, 3, 24), true);
     assert.equal(parseArgs(["--diagnose-network"]).diagnoseNetwork, true);
-    assert.equal(parseArgs(["--fetch-strategy", "last_tweets"]).fetchStrategy, "last_tweets");
+    assert.equal(parseArgs(["--handle", "target"]).sourceUrl, "https://apitest.dayclaw.com/api/source/public/x/target/items");
+    assert.equal(parseArgs(["--source-url", "https://example.test/items"]).sourceUrl, "https://example.test/items");
 
     console.log("self_test passed");
   } finally {

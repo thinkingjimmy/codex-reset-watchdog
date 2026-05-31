@@ -3,7 +3,7 @@
 # This profile is intentionally narrower than full access:
 # - read minimal runtime files;
 # - write only inside the current workspace;
-# - allow outbound HTTPS only to TwitterAPI.io.
+# - allow outbound HTTPS only to the Dayclaw public source.
 #
 # If an older sandbox_mode is active in any config layer, Codex ignores
 # permission profiles. In that compatibility path, the project-local rule in
@@ -22,4 +22,4 @@ default_permissions = "codex-reset-watchdog-net"
 enabled = true
 
 [permissions.codex-reset-watchdog-net.network.domains]
-"api.twitterapi.io" = "allow"
+"apitest.dayclaw.com" = "allow"

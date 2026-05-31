@@ -2,17 +2,17 @@
 
 [中文说明](README.zh-CN.md)
 
-A zero-dependency Codex skill repo for monitoring [`@thsottiaux`](https://x.com/thsottiaux) with **Codex Automation**. It fetches new tweets and replies through TwitterAPI.io, emits every unseen item to the Automation LLM, and surfaces findings only through Codex Automation/Triage when the LLM sees a Codex usage/quota/rate-limit reset signal.
+A zero-dependency Codex skill repo for monitoring [`@thsottiaux`](https://x.com/thsottiaux) with **Codex Automation**. It fetches public X items from Dayclaw, emits every unseen item to the Automation LLM, and surfaces findings only through Codex Automation/Triage when the LLM sees a Codex usage/quota/rate-limit reset signal.
 
 ## What It Does
 
-- Works out of the box: users provide only an API key, with no Python, dependency install, or build step.
-- Catches terse replies: answers like “yes, later today” are judged with their thread context.
-- Gives the LLM the full new batch: every unseen tweet/reply is reviewed, reducing rule prefilter misses.
+- Gives users a one-prompt setup flow: Codex installs the skill from GitHub, validates it, primes state, and creates an hourly Automation.
+- Works without a paid API key: the default source is `https://apitest.dayclaw.com/api/source/public/x/thsottiaux/items`.
+- Gives the LLM the full new batch: every unseen item is reviewed, reducing rule prefilter misses.
 - Stays quiet when nothing matters: no reset/refill/restored-allowance signal means no finding.
-- Avoids repeat noise: the same tweet/reply is handled once, while future new posts remain eligible.
-- Saves API credits: normal checks use Advanced Search with a `since_time/until_time` incremental window instead of repeatedly returning the latest 40 tweets.
-- Handles network blips calmly: transient DNS/network failures do not immediately spam Triage.
+- Avoids repeat noise: the same item is handled once, while future new posts remain eligible.
+- Handles network blips calmly: transient Dayclaw DNS/network failures do not immediately spam Triage.
+- Makes Automation runs readable: the run result should be a short LLM summary, not raw JSON.
 - Keeps one notification surface: findings appear only in Codex Automation/Triage, not external channels.
 
 ## Skill Layout
@@ -22,15 +22,14 @@ The repo is shaped as a single Codex skill directory: `SKILL.md` at the root, op
 ```text
 codex-reset-watchdog/
   .codex/
-    config.toml                   # Minimal Codex permission profile, replacing full access
-    README.md                     # Codex configuration notes
+    config.toml                   # Minimal Codex permission profile
     rules/
-      codex-reset-watchdog.rules  # Command-level network fallback for older sandbox mode
+      codex-reset-watchdog.rules  # Command-level network fallback
   SKILL.md                         # Skill metadata and operating instructions
   README.md                        # English setup guide
   README.zh-CN.md                  # Chinese setup guide
   env.example                      # Visible local configuration template
-  .gitignore                       # Keeps secrets, caches, and state out of git
+  .gitignore                       # Keeps caches and state out of git
   agents/
     openai.yaml                    # Optional Codex skill display metadata
   references/
@@ -38,78 +37,64 @@ codex-reset-watchdog/
     deployment.md                  # Operations checklist
     llm-judge-rubric.md            # LLM review rubric for review_items
   scripts/
-    README.md                      # Runtime module map
     check_once.mjs                 # Zero-dependency Automation entrypoint
     self_test.mjs                  # Local deterministic tests
 ```
 
-## What You Need To Do
+## One-Prompt Setup
 
-Download this skill folder, then add a TwitterAPI.io API key. There are no project dependencies to install.
-
-Start from GitHub:
-
-1. Open this project's GitHub page.
-2. Click the green `Code` button.
-3. Choose `Download ZIP`.
-4. Unzip the downloaded file.
-5. Open the unzipped `codex-reset-watchdog` folder in VS Code or Codex.
-6. Open the visible file `env.example`.
-7. Duplicate `env.example` and rename the copy to `env`.
-8. Open `env` and replace only this placeholder line:
-
-```env
-TWITTERAPI_IO_KEY=PASTE_YOUR_TWITTERAPI_IO_KEY_HERE
-```
-
-## Get An API Key
-
-1. Open <https://twitterapi.io/>.
-2. Sign up or log in.
-3. Open <https://twitterapi.io/dashboard>.
-4. Copy the API key shown on the dashboard homepage.
-5. Paste it into the local `env` file:
-
-```env
-TWITTERAPI_IO_KEY=your_key_goes_here
-```
-
-Do not paste the API key into chat, and do not commit it to GitHub.
-
-## Create The Automation In Codex
-
-After filling `env`, open Codex, use Codex to open this project folder, then send this in Chat:
+Open Codex and paste this prompt. Codex should install the skill, run the basic checks, prime the baseline state, and create an hourly Automation for you.
 
 ```text
-Use the codex-reset-watchdog skill in the current folder to create a Codex Automation.
+Install and set up the codex-reset-watchdog skill from GitHub:
+https://github.com/thinkingjimmy/codex-reset-watchdog
 
-Before creating it:
-1. Run node scripts/self_test.mjs
-2. Run node scripts/check_once.mjs --prime-state --json to initialize state
+Use Codex's skill installation workflow if available. If you need a fallback, clone the repo and use that folder as the Automation working directory.
 
-Then create an Automation that runs every 1 hour:
-- Automation prompt: use the full contents of references/automation-prompt.md directly; do not improvise or rewrite it
-- working directory: the current codex-reset-watchdog folder
-- permissions: use the project .codex/config.toml profile, codex-reset-watchdog-net; do not enable full access for this script
-- command: node scripts/check_once.mjs --include-replies true --hydrate-reply-context true --json
-- read review_items from the JSON output on every run
-- judge them with references/llm-judge-rubric.md
-- post a Codex Triage finding only for Codex usage/quota/rate-limit reset, refill, restored allowance, or remediation signals
-- archive silently when there is no signal
-- do not print, copy, or write my API key anywhere
+After installation:
+1. Find the installed skill folder that contains SKILL.md and scripts/check_once.mjs.
+2. Run node scripts/self_test.mjs.
+3. Run node scripts/check_once.mjs --prime-state --json to create the baseline state.
+4. Run node scripts/check_once.mjs --dry-run --json once to confirm the Dayclaw public source, JSON parsing, and state dedupe.
+5. Create an hourly Codex Automation:
+   - working directory: the installed codex-reset-watchdog folder
+   - command: node scripts/check_once.mjs --json
+   - prompt: use the full contents of references/automation-prompt.md exactly
+   - permissions: use the project .codex/config.toml profile codex-reset-watchdog-net if available; otherwise grant only workspace write plus outbound HTTPS to apitest.dayclaw.com
+6. Give me a concise setup summary with pass/fail status, Automation cadence, working directory, state path, and what the Codex Test button should show.
+
+Do not paste raw JSON unless I ask for it. Do not enable full access unless the narrow network permission path is unavailable and you explain the tradeoff first.
 ```
 
-Codex will verify the script, prime the current tweets/replies as the baseline, then create the scheduled Automation using the full contents of [`references/automation-prompt.md`](references/automation-prompt.md). The LLM judging rubric lives in [`references/llm-judge-rubric.md`](references/llm-judge-rubric.md). These files are the source of truth; do not let Codex invent a different runtime prompt.
+There is no API key to buy or paste. The default source is:
 
-After enablement, ordinary scheduled runs should execute only the main command. `self_test`, `--prime-state`, and `--dry-run` are setup/pre-enable checks, not every-run work. Once state has been primed, repeated `status=ok`, `fetched=40`, `new_items=0`, and `review_count=0` output is a normal no-op check and should not be written to automation memory.
+```text
+https://apitest.dayclaw.com/api/source/public/x/thsottiaux/items
+```
+
+Codex will verify the script, prime the current public items as the baseline, then create the scheduled Automation using the full contents of [`references/automation-prompt.md`](references/automation-prompt.md). The LLM judging rubric lives in [`references/llm-judge-rubric.md`](references/llm-judge-rubric.md). These files are the source of truth; do not let Codex invent a different runtime prompt.
+
+## What Test Should Show
+
+After setup, click **Test** in Codex Automations. Codex uses the same Automation prompt for Test and scheduled runs, so every run ends with a short LLM summary like:
+
+```text
+Codex Reset Watchdog is healthy.
+- Dayclaw public source is reachable.
+- State is persistent at var/state.json.
+- No new public items were found since the primed baseline.
+- No Codex usage/quota/rate-limit reset signal was reported.
+```
+
+The result should not paste the raw `check_once.mjs --json` object. Healthy no-op runs should not create Triage findings, external notifications, or routine automation memory; the concise summary is safe to show in Automation run logs and Test results.
 
 ## State And Dedupe
 
 `STATE_FILE_PATH` points to a persistent JSON file:
 
-- `seen_tweets` prevents the same tweet/reply from being sent to the LLM every run.
-- `operational_failures` tracks consecutive transient TwitterAPI.io network failures.
-- Future reset posts with a new tweet ID can still be reviewed and reported.
+- `seen_tweets` prevents the same source item from being sent to the LLM every run.
+- `operational_failures` tracks consecutive transient Dayclaw network failures.
+- Future reset posts with a new item/tweet ID can still be reviewed and reported.
 
 Default state file location:
 
@@ -123,40 +108,35 @@ STATE_FILE_PATH=var/state.json
 
 `check_once.mjs --json` prints one JSON object. Important fields:
 
-- `status`: `ok`, `primed`, `state_updated`, `transient_network_error`, or `error`.
-- `review_count`: number of new unseen tweets/replies emitted for LLM review.
+- `status`: `ok`, `primed`, `state_updated`, `transient_network_error`, `network_diagnostic`, or `error`.
+- `source_url`: the Dayclaw public source endpoint used for this run.
+- `review_count`: number of new unseen items emitted for LLM review.
 - `has_review_items`: whether `review_items` is non-empty.
-- `review_items`: all new unseen tweets/replies with text, URL, author, reply metadata, event key, and fetched reply context.
-- `api_pages`: per-page API diagnostics, including response keys, status, message, and extracted tweet count.
-- `api_warning`: present when the API succeeds but no tweet/reply can be extracted, useful for diagnosing target account, user id, or response-shape issues.
+- `review_items`: all new unseen items with text, URL, author, reply metadata, event key, and available context fields.
+- `api_pages`: API diagnostics, including response keys, source URL, limit, and extracted item count.
+- `api_warning`: present when the API succeeds but no item can be extracted.
 - `state`: actual state file path, requested path, fallback status, and related warnings.
-- `fetch_strategy`: fetch mode, defaulting to `advanced_search`; set `last_tweets` only as a fallback.
+- `fetch_strategy`: always `dayclaw_public_items`.
 - `llm_instruction`: short instruction for the Automation LLM.
-- `reply_context_fetches`: number of TwitterAPI.io thread-context lookups.
 - `operational_error`: present for transient/network/runtime failures; report only when instructed by the Automation prompt.
-- `results`: per-tweet handling details such as `queued_for_llm`, `already_seen`, or `ignored_repost`.
+- `results`: per-item handling details such as `queued_for_llm`, `already_seen`, or `ignored_reply`.
 
-Transient DNS failures for `api.twitterapi.io` are retried inside the same run. If all retries fail, the script exits cleanly with `status: "transient_network_error"` so one-off network blips do not spam Triage.
+Transient DNS failures for `apitest.dayclaw.com` are retried inside the same run. If all retries fail, the script exits cleanly with `status: "transient_network_error"` so one-off network blips do not spam Triage.
 
-## API Credits And Incremental Fetching
+## Public Source Notes
 
-TwitterAPI.io's own docs warn that repeatedly calling `last_tweets` for frequent single-account monitoring can cost a lot because each page returns up to 20 tweets. This skill now defaults to `advanced_search`:
+The Dayclaw endpoint currently returns a fixed public batch of recent items:
 
-```env
-FETCH_STRATEGY=advanced_search
-INCREMENTAL_OVERLAP_SECONDS=300
-INCREMENTAL_BOOTSTRAP_LOOKBACK_SECONDS=7200
-CHECK_ONCE_MAX_PAGES=1
+```text
+https://apitest.dayclaw.com/api/source/public/x/thsottiaux/items
 ```
 
 Runtime behavior:
 
-- The first prime run establishes a checkpoint.
-- Scheduled runs search only the time window since the last successful check.
-- The window overlaps by `INCREMENTAL_OVERLAP_SECONDS` to avoid clock-skew misses.
-- If there are no new tweets/replies, the run usually pays for one empty window search instead of repeatedly returning 20-40 old tweets.
-
-Set `FETCH_STRATEGY=last_tweets` only as a compatibility fallback. It is simpler but spends more credits.
+- The first prime run marks the current batch as already seen.
+- Scheduled runs fetch the public batch and dedupe locally by stable tweet/item ID.
+- The public feed exposes reply metadata when available, but it does not expose full parent-thread hydration.
+- If the feed returns no extractable items, the script emits `api_warning` so the Automation can report an operational finding.
 
 ## Permission Guidance
 
@@ -164,9 +144,9 @@ This skill has a small permission footprint:
 
 - read `env` / `.env` in the current project;
 - write `var/state.json` in the current project;
-- make HTTPS requests to `https://api.twitterapi.io`.
+- make HTTPS requests to `https://apitest.dayclaw.com`.
 
-The repo includes the recommended configuration in `.codex/config.toml`. It defines `codex-reset-watchdog-net`, which allows workspace writes and only the `api.twitterapi.io` network destination:
+The repo includes the recommended configuration in `.codex/config.toml`. It defines `codex-reset-watchdog-net`, which allows workspace writes and only the `apitest.dayclaw.com` network destination:
 
 ```toml
 default_permissions = "codex-reset-watchdog-net"
@@ -181,18 +161,14 @@ default_permissions = "codex-reset-watchdog-net"
 enabled = true
 
 [permissions.codex-reset-watchdog-net.network.domains]
-"api.twitterapi.io" = "allow"
+"apitest.dayclaw.com" = "allow"
 ```
 
 The first time you open this project in Codex, if Codex asks whether to trust the project configuration, inspect `.codex/config.toml` and trust it only after confirming it contains the narrow profile above. If the permissions selector offers `Custom (config.toml)`, select it.
 
-Important: permission profiles do not compose with the older `sandbox_mode` settings. If the current Codex runtime still uses the older `workspace-write` sandbox, `default_permissions` may not apply and local `node fetch` can still be blocked. For that compatibility path, the repo includes `.codex/rules/codex-reset-watchdog.rules`, which allows only `node scripts/check_once.mjs` to run outside the sandbox; this is still narrower than enabling full access for the whole Automation.
+Important: permission profiles do not compose with the older `sandbox_mode` settings. If the current Codex runtime still uses the older `workspace-write` sandbox, `default_permissions` may not apply and local `node fetch` can still be blocked. For that compatibility path, the repo includes `.codex/rules/codex-reset-watchdog.rules`, which allows only `node scripts/check_once.mjs` to run outside the sandbox.
 
-If you already created an Automation, make sure its working directory also has the latest `.codex/` directory. Updating this repo does not update an older test copy automatically; either sync the latest `.codex/` into the Automation working directory or recreate the Automation from the updated repo.
-
-Do not enable full access just for this skill. Full access expands filesystem read/write scope beyond what the script needs. The best practice is to use the project-level profile above; use full access only as a temporary fallback when the current Codex version cannot apply project permissions and the user explicitly accepts the risk.
-
-Some skills can reach the network without full access because they may use built-in Codex tools, browser plugins, MCP connectors, or hosted capabilities. Those requests do not necessarily run through local `node fetch`. This project uses a plain Node CLI, so it is governed by the current shell/Automation sandbox network permissions.
+Do not enable full access just for this skill. Full access expands filesystem read/write scope beyond what the script needs.
 
 ## Network Diagnostics
 
@@ -202,17 +178,13 @@ If Automation returns `status: "transient_network_error"`, `root_cause: "connect
 node scripts/check_once.mjs --diagnose-network --json
 ```
 
-This checks DNS resolution and HTTPS reachability for `api.twitterapi.io`. If `dns.ok=false` or `http.reached=false`, the failure is in the runtime environment's outbound network, not tweet content, LLM judgment, or state dedupe. Allow outbound HTTPS to `https://api.twitterapi.io` for the Automation runtime instead of broadening filesystem permissions.
+This checks DNS resolution and HTTPS reachability for `apitest.dayclaw.com`. If `dns.ok=false` or `http.reached=false`, the failure is in the runtime environment's outbound network, not item content, LLM judgment, or state dedupe. Allow outbound HTTPS to `https://apitest.dayclaw.com` for the Automation runtime instead of broadening filesystem permissions.
 
-If `network_ok=true` but the normal check still fails, inspect the API key, target handle/userId, and the `api_pages` / `api_warning` fields.
+If `network_ok=true` but the normal check still fails, inspect `source_url`, `api_pages`, and `api_warning`.
 
 ## Links
 
 - Target profile: <https://x.com/thsottiaux>
-- TwitterAPI.io docs: <https://docs.twitterapi.io/introduction>
-- TwitterAPI.io authentication: <https://docs.twitterapi.io/authentication>
-- TwitterAPI.io `last_tweets`: <https://docs.twitterapi.io/api-reference/endpoint/get_user_last_tweets>
-- TwitterAPI.io `advanced_search`: <https://docs.twitterapi.io/api-reference/endpoint/tweet_advanced_search>
-- TwitterAPI.io `thread_context`: <https://docs.twitterapi.io/api-reference/endpoint/get_tweet_thread_context>
+- Dayclaw public source: <https://apitest.dayclaw.com/api/source/public/x/thsottiaux/items>
 - Codex Skills docs: <https://developers.openai.com/codex/skills>
 - Codex Automations docs: <https://developers.openai.com/codex/app/automations>

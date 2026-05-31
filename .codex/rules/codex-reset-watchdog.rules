@@ -8,9 +8,9 @@
 prefix_rule(
     pattern = ["node", "scripts/check_once.mjs"],
     decision = "allow",
-    justification = "Allow the watchdog runtime entrypoint to reach TwitterAPI.io when older workspace-write sandbox mode blocks network access.",
+    justification = "Allow the watchdog runtime entrypoint to reach the Dayclaw public source when older workspace-write sandbox mode blocks network access.",
     match = [
-        "node scripts/check_once.mjs --include-replies true --hydrate-reply-context true --json",
+        "node scripts/check_once.mjs --json",
         "node scripts/check_once.mjs --prime-state --json",
         "node scripts/check_once.mjs --diagnose-network --json",
     ],

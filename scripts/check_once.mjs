@@ -1,11 +1,4 @@
 #!/usr/bin/env node
-/**
- * - [INPUT]: 依赖 Node.js 内置 fs/path/os/dns/fetch，读取 env/.env、TwitterAPI.io 和 JSON state。
- * - [OUTPUT]: 对外提供 check_once CLI、TwitterAPI.io 抓取函数、tweet 批次整理和 LLM-first JSON 汇总。
- * - [POS]: scripts 的零依赖运行入口，只搬运事实与维护记忆，语义判断交给 Codex Automation LLM。
- * - [PROTOCOL]: 变更时更新此头部，然后检查 README.md
- */
-
 import dns from "node:dns/promises";
 import fs from "node:fs";
 import os from "node:os";
@@ -13,23 +6,15 @@ import path from "node:path";
 import process from "node:process";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-export const LAST_TWEETS_URL = "https://api.twitterapi.io/twitter/user/last_tweets";
-export const ADVANCED_SEARCH_URL = "https://api.twitterapi.io/twitter/tweet/advanced_search";
-export const THREAD_CONTEXT_URL = "https://api.twitterapi.io/twitter/tweet/thread_context";
+export const DAYCLAW_ITEMS_BASE_URL = "https://apitest.dayclaw.com/api/source/public/x";
+export const DEFAULT_TARGET_X_HANDLE = "thsottiaux";
 export const DEFAULT_STATE_FILE_PATH = "var/state.json";
-export const NETWORK_FAILURE_KEY = "twitterapi_network";
+export const NETWORK_FAILURE_KEY = "dayclaw_network";
 
-const API_KEY_PLACEHOLDERS = new Set([
-  "",
-  "REPLACE_WITH_YOUR_TWITTERAPI_IO_KEY",
-  "YOUR_TWITTERAPI_IO_KEY",
-  "PASTE_YOUR_TWITTERAPI_IO_KEY_HERE",
-]);
-
-export class TwitterAPITransientError extends Error {
+export class DayclawTransientError extends Error {
   constructor({ operation, url, attempts, cause }) {
-    super(String(cause?.message || cause || "TwitterAPI.io transient network error"));
-    this.name = "TwitterAPITransientError";
+    super(String(cause?.message || cause || "Dayclaw transient network error"));
+    this.name = "DayclawTransientError";
     this.operation = operation;
     this.url = url;
     this.attempts = attempts;
@@ -38,14 +23,7 @@ export class TwitterAPITransientError extends Error {
   }
 
   toSummary() {
-    return {
-      type: this.cause?.name || "Error",
-      operation: this.operation,
-      url: this.url,
-      attempts: this.attempts,
-      root_cause: this.rootCause,
-      detail: sanitizeException(this.cause),
-    };
+    return { type: this.cause?.name || "Error", operation: this.operation, url: this.url, attempts: this.attempts, root_cause: this.rootCause, detail: sanitizeException(this.cause) };
   }
 }
 
@@ -82,16 +60,6 @@ export function loadRuntimeEnvironment(root = repoRoot()) {
   loadEnvFileIfPresent(path.join(root, ".env"));
   loadEnvFileIfPresent(path.join(root, "env"));
   loadEnvFileIfPresent(path.join(process.cwd(), ".env"));
-
-  const secretCandidates = [
-    process.env.CODEX_RESET_WATCH_SECRETS_FILE,
-    process.env.TWITTERAPI_IO_SECRETS_FILE,
-    path.join(root, ".secrets.env"),
-    path.join(root, "secrets.env"),
-    path.join(root, "secrets", "secrets.env"),
-    path.join(os.homedir(), ".config", "codex-reset-watchdog", "secrets.env"),
-  ];
-  for (const candidate of secretCandidates) loadEnvFileIfPresent(expandHome(candidate));
 }
 
 export function envBool(name, defaultValue = false) {
@@ -121,39 +89,6 @@ function normalizeStatePath(value) {
   return path.isAbsolute(expanded) ? expanded : path.resolve(repoRoot(), expanded);
 }
 
-function readFirstNonemptyLine(filePath) {
-  if (!filePath) return "";
-  const expanded = expandHome(filePath);
-  if (!fs.existsSync(expanded) || !fs.statSync(expanded).isFile()) return "";
-  for (const rawLine of fs.readFileSync(expanded, "utf8").split(/\r?\n/)) {
-    const line = rawLine.trim();
-    if (line && !line.startsWith("#")) return line;
-  }
-  return "";
-}
-
-export function requireApiKey(root = repoRoot()) {
-  const envKey = String(process.env.TWITTERAPI_IO_KEY || "").trim();
-  if (!API_KEY_PLACEHOLDERS.has(envKey)) return envKey;
-
-  const keyFileCandidates = [
-    process.env.TWITTERAPI_IO_KEY_FILE,
-    path.join(root, "secrets", "twitterapi_io_key"),
-    path.join(root, ".twitterapi_io_key"),
-    path.join(os.homedir(), ".config", "codex-reset-watchdog", "twitterapi_io_key"),
-  ];
-  for (const candidate of keyFileCandidates) {
-    const key = readFirstNonemptyLine(candidate);
-    if (key) return key;
-  }
-
-  const error = new Error(
-    "TwitterAPI.io API key is required. Copy env.example to env or .env and replace TWITTERAPI_IO_KEY=PASTE_YOUR_TWITTERAPI_IO_KEY_HERE with your real key.",
-  );
-  error.code = "CONFIG_ERROR";
-  throw error;
-}
-
 export function prettyJson(value) {
   return JSON.stringify(value, null, 2);
 }
@@ -168,7 +103,7 @@ export class DedupeStore {
   }
 
   emptyState() {
-    return { seen_tweets: {}, reported_events: {}, operational_failures: {}, checkpoints: {} };
+    return { seen_tweets: {}, reported_events: {}, operational_failures: {} };
   }
 
   load() {
@@ -202,7 +137,6 @@ export class DedupeStore {
       seen_tweets: seen,
       reported_events: objectOrEmpty(raw.reported_events),
       operational_failures: objectOrEmpty(raw.operational_failures),
-      checkpoints: objectOrEmpty(raw.checkpoints),
     };
   }
 
@@ -280,16 +214,6 @@ export class DedupeStore {
     delete state.operational_failures[key];
     this.save(state);
   }
-
-  checkpoint(key) {
-    return objectOrEmpty(this.load().checkpoints[String(key)]);
-  }
-
-  updateCheckpoint(key, patch) {
-    const state = this.load();
-    state.checkpoints[String(key)] = { ...objectOrEmpty(state.checkpoints[String(key)]), ...patch };
-    this.save(state);
-  }
 }
 
 function objectOrEmpty(value) {
@@ -335,8 +259,8 @@ function networkRootCause(error) {
 }
 
 function retryDelayMs(attempt) {
-  const base = Math.max(envInt("TWITTERAPI_IO_RETRY_SLEEP_SECONDS", 5), 0);
-  const cap = Math.max(envInt("TWITTERAPI_IO_RETRY_MAX_SLEEP_SECONDS", 30), 0);
+  const base = Math.max(envInt("DAYCLAW_RETRY_SLEEP_SECONDS", 5), 0);
+  const cap = Math.max(envInt("DAYCLAW_RETRY_MAX_SLEEP_SECONDS", 30), 0);
   if (base === 0 || cap === 0) return 0;
   return Math.min(cap, base * 2 ** Math.max(attempt - 1, 0)) * 1000;
 }
@@ -345,26 +269,32 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function fetchJsonWithTimeout(url, timeoutSeconds) {
+export function buildDayclawItemsUrl({ handle, sourceUrl, baseUrl = DAYCLAW_ITEMS_BASE_URL }) {
+  if (sourceUrl) return new URL(sourceUrl).href;
+  const cleanHandle = String(handle || DEFAULT_TARGET_X_HANDLE).replace(/^@/, "");
+  return new URL(`${encodeURIComponent(cleanHandle)}/items`, `${baseUrl.replace(/\/+$/, "")}/`).href;
+}
+
+async function fetchJsonOnce(url, timeoutSeconds) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutSeconds * 1000);
   try {
-    const response = await fetch(url, { signal: controller.signal, headers: { "X-API-Key": requireApiKey() } });
+    const response = await fetch(url, { signal: controller.signal });
     const body = await response.text();
     let payload = null;
     try {
       payload = body ? JSON.parse(body) : {};
     } catch {
-      throw new Error(`TwitterAPI.io returned non-JSON response with status ${response.status}`);
+      throw new Error(`Dayclaw returned non-JSON response with status ${response.status}`);
     }
     if (!response.ok) {
-      const message = payload?.message || payload?.error || response.statusText || "HTTP error";
-      const error = new Error(`TwitterAPI.io HTTP ${response.status}: ${message}`);
+      const message = payload?.message || payload?.error || payload?.detail || response.statusText || "HTTP error";
+      const error = new Error(`Dayclaw HTTP ${response.status}: ${message}`);
       error.status = response.status;
       throw error;
     }
     if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
-      throw new Error("TwitterAPI.io response is not a JSON object");
+      throw new Error("Dayclaw response is not a JSON object");
     }
     return payload;
   } finally {
@@ -372,22 +302,16 @@ async function fetchJsonWithTimeout(url, timeoutSeconds) {
   }
 }
 
-export async function getJsonWithRetries(endpoint, { params, timeout = 20, operation }) {
-  const attempts = Math.max(envInt("TWITTERAPI_IO_RETRY_ATTEMPTS", 3), 1);
-  const url = new URL(endpoint);
-  for (const [key, value] of Object.entries(params)) {
-    if (value !== undefined && value !== null && value !== "") url.searchParams.set(key, String(value));
-  }
-
+export async function getJsonWithRetries(url, { timeout = 20, operation = "source_items" } = {}) {
+  const attempts = Math.max(envInt("DAYCLAW_RETRY_ATTEMPTS", 3), 1);
   let lastError = null;
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
     try {
-      return await fetchJsonWithTimeout(url, timeout);
+      return await fetchJsonOnce(url, timeout);
     } catch (error) {
       lastError = error;
       const retryableStatus = [429, 500, 502, 503, 504].includes(Number(error.status || 0));
-      const transientNetwork = isTransientNetworkError(error);
-      const retryable = retryableStatus || transientNetwork;
+      const retryable = retryableStatus || isTransientNetworkError(error);
       if (!retryable || attempt >= attempts) break;
       const delay = retryDelayMs(attempt);
       if (delay) await sleep(delay);
@@ -395,24 +319,23 @@ export async function getJsonWithRetries(endpoint, { params, timeout = 20, opera
   }
 
   if (isTransientNetworkError(lastError)) {
-    throw new TwitterAPITransientError({ operation, url: endpoint, attempts, cause: lastError });
+    throw new DayclawTransientError({ operation, url, attempts, cause: lastError });
   }
   throw lastError;
 }
 
-export async function diagnoseNetwork({ handle, userId, timeout = 10 }) {
-  const host = new URL(LAST_TWEETS_URL).hostname;
+export async function diagnoseNetwork({ sourceUrl, timeout = 10 }) {
+  const url = new URL(sourceUrl);
   const diagnostic = {
-    host,
-    endpoint: LAST_TWEETS_URL,
+    host: url.hostname,
+    endpoint: url.href,
     dns: { ok: false },
     http: { reached: false },
-    api_key_configured: false,
     network_ok: false,
   };
 
   try {
-    const lookup = await dns.lookup(host);
+    const lookup = await dns.lookup(url.hostname);
     diagnostic.dns = { ok: true, address: lookup.address, family: lookup.family };
   } catch (error) {
     diagnostic.dns = {
@@ -423,24 +346,11 @@ export async function diagnoseNetwork({ handle, userId, timeout = 10 }) {
     };
   }
 
-  const url = new URL(LAST_TWEETS_URL);
-  if (userId) url.searchParams.set("userId", userId);
-  else if (handle) url.searchParams.set("userName", String(handle).replace(/^@/, ""));
-  url.searchParams.set("includeReplies", "true");
-
-  const headers = {};
-  try {
-    headers["X-API-Key"] = requireApiKey();
-    diagnostic.api_key_configured = true;
-  } catch (error) {
-    diagnostic.api_key_error = sanitizeException(error);
-  }
-
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeout * 1000);
   const started = Date.now();
   try {
-    const response = await fetch(url, { headers, signal: controller.signal });
+    const response = await fetch(url, { signal: controller.signal });
     diagnostic.http = {
       reached: true,
       status: response.status,
@@ -462,102 +372,14 @@ export async function diagnoseNetwork({ handle, userId, timeout = 10 }) {
 
   diagnostic.network_ok = Boolean(diagnostic.dns.ok && diagnostic.http.reached);
   diagnostic.hint = diagnostic.network_ok
-    ? "Network reaches TwitterAPI.io. If the main check still fails, inspect HTTP status, API key, target handle/userId, and api_pages."
-    : "This environment cannot reach api.twitterapi.io. In Codex, use the project codex-reset-watchdog-net permission profile or otherwise allow outbound HTTPS to this host; full filesystem access is not required.";
+    ? "Network reaches the Dayclaw public source. If the main check still fails, inspect HTTP status, source URL, and api_pages."
+    : "This environment cannot reach apitest.dayclaw.com. In Codex, use the project codex-reset-watchdog-net permission profile or otherwise allow outbound HTTPS to this host; full filesystem access is not required.";
   return diagnostic;
 }
 
 function isTransientNetworkError(error) {
-  if (!error || error.status || error.code === "CONFIG_ERROR") return false;
+  if (!error || error.status) return false;
   return error.name === "AbortError" || error instanceof TypeError || String(error.message || "").includes("fetch failed");
-}
-
-export async function fetchLastTweets({ handle, userId, includeReplies, maxPages, timeout = 20 }) {
-  if (!handle && !userId) throw new Error("Either --handle/TARGET_X_HANDLE or --user-id/TARGET_X_USER_ID is required");
-  const baseParams = { includeReplies: String(Boolean(includeReplies)) };
-  if (userId) baseParams.userId = userId;
-  else baseParams.userName = String(handle).replace(/^@/, "");
-
-  const tweets = [];
-  const pages = [];
-  let cursor = "";
-  for (let page = 0; page < Math.max(maxPages, 1); page += 1) {
-    const payload = await getJsonWithRetries(LAST_TWEETS_URL, {
-      params: cursor ? { ...baseParams, cursor } : baseParams,
-      timeout,
-      operation: "last_tweets",
-    });
-    if (payloadStatus(payload) === "error") throw new Error(payloadMessage(payload) || "TwitterAPI.io returned error status");
-    const pageTweets = tweetsFromPayload(payload);
-    pages.push({ ...apiPageSummary(payload, pageTweets.length), source: "last_tweets" });
-    tweets.push(...pageTweets.filter((item) => item && typeof item === "object"));
-    if (!hasNextPage(payload)) break;
-    cursor = nextCursor(payload);
-    if (!cursor) break;
-  }
-  return { tweets, pages };
-}
-
-export function buildAdvancedSearchQuery({ handle, includeReplies, sinceTime, untilTime }) {
-  const parts = [
-    `from:${String(handle || "").replace(/^@/, "")}`,
-    `since_time:${Math.max(Number(sinceTime || 0), 0)}`,
-    `until_time:${Math.max(Number(untilTime || 0), 0)}`,
-  ];
-  if (!includeReplies) parts.push("-filter:replies");
-  return parts.join(" ");
-}
-
-export async function fetchAdvancedSearchTweets({ handle, includeReplies, sinceTime, untilTime, maxPages, timeout = 20 }) {
-  if (!handle) throw new Error("Advanced search fetch strategy requires --handle/TARGET_X_HANDLE");
-  const baseParams = {
-    query: buildAdvancedSearchQuery({ handle, includeReplies, sinceTime, untilTime }),
-    queryType: "Latest",
-  };
-
-  const tweets = [];
-  const pages = [];
-  let cursor = "";
-  for (let page = 0; page < Math.max(maxPages, 1); page += 1) {
-    const payload = await getJsonWithRetries(ADVANCED_SEARCH_URL, {
-      params: cursor ? { ...baseParams, cursor } : baseParams,
-      timeout,
-      operation: "advanced_search",
-    });
-    if (payloadStatus(payload) === "error") throw new Error(payloadMessage(payload) || "TwitterAPI.io advanced_search returned error status");
-    const pageTweets = tweetsFromPayload(payload);
-    pages.push({
-      ...apiPageSummary(payload, pageTweets.length),
-      source: "advanced_search",
-      since_time: sinceTime,
-      until_time: untilTime,
-      query: baseParams.query,
-    });
-    tweets.push(...pageTweets.filter((item) => item && typeof item === "object"));
-    if (!hasNextPage(payload)) break;
-    cursor = nextCursor(payload);
-    if (!cursor) break;
-  }
-  return { tweets, pages };
-}
-
-export async function fetchThreadContext(tweetId, { maxPages, timeout = 20 }) {
-  const context = [];
-  let cursor = "";
-  for (let page = 0; page < Math.max(maxPages, 1); page += 1) {
-    const payload = await getJsonWithRetries(THREAD_CONTEXT_URL, {
-      params: cursor ? { tweetId, cursor } : { tweetId },
-      timeout,
-      operation: "thread_context",
-    });
-    if (payloadStatus(payload) === "error") throw new Error(payloadMessage(payload) || "TwitterAPI.io thread_context returned error status");
-    const pageItems = threadItemsFromPayload(payload);
-    context.push(...pageItems.filter((item) => item && typeof item === "object"));
-    if (!hasNextPage(payload)) break;
-    cursor = nextCursor(payload);
-    if (!cursor) break;
-  }
-  return context;
 }
 
 function firstArrayAt(payload, paths) {
@@ -569,118 +391,66 @@ function firstArrayAt(payload, paths) {
   return [];
 }
 
-export function tweetsFromPayload(payload) {
+export function itemsFromPayload(payload) {
   return firstArrayAt(payload, [
-    ["tweets"],
-    ["data", "tweets"],
+    ["items"],
     ["data", "items"],
-    ["result", "tweets"],
     ["result", "items"],
   ]);
 }
 
-function threadItemsFromPayload(payload) {
-  return firstArrayAt(payload, [
-    ["replies"],
-    ["tweets"],
-    ["data", "replies"],
-    ["data", "tweets"],
-    ["data", "items"],
-    ["result", "replies"],
-    ["result", "tweets"],
-    ["result", "items"],
-  ]);
-}
-
-function hasNextPage(payload) {
-  return Boolean(payload.has_next_page ?? payload.hasNextPage ?? payload.data?.has_next_page ?? payload.data?.hasNextPage);
-}
-
-function nextCursor(payload) {
-  return String(payload.next_cursor ?? payload.nextCursor ?? payload.data?.next_cursor ?? payload.data?.nextCursor ?? "");
-}
-
-function apiPageSummary(payload, tweetCount) {
+export function normalizeSourceItem(raw) {
+  const metadata = objectOrEmpty(raw?.metadata);
+  const id = String(raw?.external_id || raw?.id || "").trim();
+  const text = String(raw?.content ?? raw?.title ?? "").trim();
+  if (!id || !text) return null;
   return {
-    status: payloadStatus(payload),
-    message: payloadMessage(payload),
-    tweet_count: tweetCount,
-    has_next_page: hasNextPage(payload),
-    next_cursor_present: Boolean(nextCursor(payload)),
-    response_keys: Object.keys(payload).sort(),
-    data_keys: payload.data && typeof payload.data === "object" && !Array.isArray(payload.data) ? Object.keys(payload.data).sort() : [],
+    id,
+    text,
+    author_username: metadata.author_user_name || raw.author || null,
+    author_name: metadata.raw_author_name || null,
+    url: raw.url || (raw.author ? `https://x.com/${raw.author}/status/${id}` : null),
+    created_at: raw.published_at || null,
+    raw,
+    context_text: "",
+    context_tweets: [],
   };
 }
 
-function monitorCheckpointKey(args) {
-  if (args.userId) return `user_id:${args.userId}`;
-  return `handle:${String(args.handle || "").replace(/^@/, "")}`;
-}
-
-export function incrementalWindowFromCheckpoint(checkpoint, { now, overlapSeconds, bootstrapLookbackSeconds }) {
-  const lastSuccessful = Number(checkpoint?.last_successful_check_at || 0);
-  const untilTime = Math.max(Number(now || 0), 0);
-  const sinceTime =
-    lastSuccessful > 0
-      ? Math.max(lastSuccessful - Math.max(overlapSeconds, 0), 0)
-      : Math.max(untilTime - Math.max(bootstrapLookbackSeconds, 1), 0);
-  return { sinceTime, untilTime, lastSuccessful };
-}
-
-function shouldUseAdvancedSearch(args) {
-  return args.fetchStrategy === "advanced_search" && Boolean(args.handle);
-}
-
-async function fetchTweetsForRun({ args, store }) {
-  if (shouldUseAdvancedSearch(args)) {
-    const checkpointKey = monitorCheckpointKey(args);
-    const window = incrementalWindowFromCheckpoint(store.checkpoint(checkpointKey), {
-      now: Math.floor(Date.now() / 1000),
-      overlapSeconds: args.incrementalOverlapSeconds,
-      bootstrapLookbackSeconds: args.incrementalBootstrapLookbackSeconds,
-    });
-    const fetched = await fetchAdvancedSearchTweets({
-      handle: args.handle,
-      includeReplies: args.includeReplies,
-      sinceTime: window.sinceTime,
-      untilTime: window.untilTime,
-      maxPages: Math.max(args.maxPages, 1),
-    });
-    return {
-      ...fetched,
-      fetchStrategy: "advanced_search",
-      checkpointKey,
-      checkpointPatch: {
-        last_successful_check_at: window.untilTime,
-        last_since_time: window.sinceTime,
-        last_fetch_strategy: "advanced_search",
-      },
-    };
-  }
-
-  const fetched = await fetchLastTweets({
-    handle: args.handle || null,
-    userId: args.userId || null,
-    includeReplies: args.includeReplies,
-    maxPages: Math.max(args.maxPages, 1),
-  });
-  return {
-    ...fetched,
-    fetchStrategy: "last_tweets",
-    checkpointKey: monitorCheckpointKey(args),
-    checkpointPatch: {
-      last_successful_check_at: Math.floor(Date.now() / 1000),
-      last_fetch_strategy: "last_tweets",
-    },
-  };
+export function extractItems(payload) {
+  return itemsFromPayload(payload)
+    .filter((item) => item && typeof item === "object")
+    .map(normalizeSourceItem)
+    .filter(Boolean);
 }
 
 function payloadStatus(payload) {
+  if (Array.isArray(payload?.items)) return "ok";
   return payload.status ?? payload.data?.status ?? payload.result?.status ?? null;
 }
 
 function payloadMessage(payload) {
   return payload.message ?? payload.data?.message ?? payload.result?.message ?? null;
+}
+
+function apiPageSummary(payload, itemCount, sourceUrl) {
+  return {
+    source: "dayclaw_public_items",
+    endpoint: sourceUrl,
+    status: payloadStatus(payload),
+    message: payloadMessage(payload),
+    item_count: itemCount,
+    limit: payload.limit ?? null,
+    response_keys: Object.keys(payload).sort(),
+    source_name: payload.source?.name || null,
+    source_url: payload.source?.source_url || null,
+  };
+}
+
+export async function fetchSourceItems({ sourceUrl, timeout = 20 }) {
+  const payload = await getJsonWithRetries(sourceUrl, { timeout, operation: "source_items" });
+  const items = itemsFromPayload(payload);
+  return { payload, rawItems: items, apiPages: [apiPageSummary(payload, items.length, sourceUrl)] };
 }
 
 function tweetIdAsBigInt(tweetId) {
@@ -692,65 +462,22 @@ function tweetIdAsBigInt(tweetId) {
 }
 
 export function tweetSortKeyCompare(left, right) {
-  const leftId = String(left?.id || left?.id_str || "");
-  const rightId = String(right?.id || right?.id_str || "");
-  const leftInt = tweetIdAsBigInt(leftId);
-  const rightInt = tweetIdAsBigInt(rightId);
+  const leftTime = Date.parse(left?.created_at || left?.raw?.published_at || "");
+  const rightTime = Date.parse(right?.created_at || right?.raw?.published_at || "");
+  if (!Number.isNaN(leftTime) && !Number.isNaN(rightTime) && leftTime !== rightTime) {
+    return leftTime - rightTime;
+  }
+  const leftInt = tweetIdAsBigInt(left?.id);
+  const rightInt = tweetIdAsBigInt(right?.id);
   if (leftInt !== null && rightInt !== null) return leftInt < rightInt ? -1 : leftInt > rightInt ? 1 : 0;
-  return String(left?.createdAt || left?.created_at || leftId).localeCompare(
-    String(right?.createdAt || right?.created_at || rightId),
-  );
-}
-
-export function extractAuthorUsername(raw) {
-  const author = raw.author && typeof raw.author === "object" ? raw.author : {};
-  return author.userName || author.username || author.screen_name || raw.screen_name || null;
-}
-
-export function extractAuthorName(raw) {
-  const author = raw.author && typeof raw.author === "object" ? raw.author : {};
-  return author.name || author.display_name || raw.display_name || null;
-}
-
-export function extractTweets(payload) {
-  const items = [];
-  if (payload?.tweet && typeof payload.tweet === "object") items.push(payload.tweet);
-  if (Array.isArray(payload?.tweets)) items.push(...payload.tweets.filter((item) => item && typeof item === "object"));
-  if (Array.isArray(payload?.replies)) items.push(...payload.replies.filter((item) => item && typeof item === "object"));
-  if (!items.length && payload?.id && payload?.text !== undefined) items.push(payload);
-
-  return items.flatMap((raw) => {
-    const id = String(raw.id || raw.id_str || "").trim();
-    const text = String(raw.text || raw.full_text || "");
-    if (!id || text === "") return [];
-    return [
-      {
-        id,
-        text,
-        author_username: extractAuthorUsername(raw),
-        author_name: extractAuthorName(raw),
-        url: raw.url || null,
-        created_at: raw.createdAt || raw.created_at || raw.created_ms || raw.snowflake_created_ms || null,
-        raw,
-        context_text: "",
-        context_tweets: [],
-      },
-    ];
-  });
-}
-
-export function isRepostLike(raw) {
-  const tweetType = String(raw?.type || raw?.tweet_type || "").toLowerCase();
-  if (tweetType === "retweet" || tweetType === "repost") return true;
-  if (raw?.retweeted_tweet) return true;
-  return String(raw?.text || "").startsWith("RT @");
+  return String(left?.id || "").localeCompare(String(right?.id || ""));
 }
 
 export function isReplyLike(raw) {
-  if (!raw) return false;
-  if (typeof raw.isReply === "boolean") return raw.isReply;
-  if (typeof raw.isReply === "string" && ["1", "true", "yes"].includes(raw.isReply.trim().toLowerCase())) return true;
-  return Boolean(raw.inReplyToId || raw.in_reply_to_status_id || raw.inReplyToUsername);
+  const metadata = objectOrEmpty(raw?.metadata);
+  if (typeof metadata.is_reply === "boolean") return metadata.is_reply;
+  if (typeof raw?.isReply === "boolean") return raw.isReply;
+  return Boolean(raw?.inReplyToId || raw?.in_reply_to_status_id);
 }
 
 export function buildTweetUrl(tweet) {
@@ -765,40 +492,9 @@ export function eventKeyForTweet(tweet) {
   return String(raw.conversationId || raw.conversation_id || raw.inReplyToId || raw.in_reply_to_status_id || tweet.id);
 }
 
-export function buildThreadContextText(contextTweets, { currentTweetId, maxChars = 2400 }) {
-  const currentInt = tweetIdAsBigInt(currentTweetId);
-  const parts = [...contextTweets]
-    .sort(tweetSortKeyCompare)
-    .flatMap((raw) => {
-      const tweetId = String(raw.id || raw.id_str || "");
-      if (tweetId && tweetId === String(currentTweetId)) return [];
-      const tweetInt = tweetIdAsBigInt(tweetId);
-      if (currentInt !== null && tweetInt !== null && tweetInt > currentInt) return [];
-      const text = String(raw.text || raw.full_text || "").trim();
-      if (!text) return [];
-      return [`@${extractAuthorUsername(raw) || "unknown"}: ${text}`];
-    });
-  const maxTweets = envInt("THREAD_CONTEXT_MAX_TWEETS", 8);
-  const selected = maxTweets > 0 ? parts.slice(-maxTweets) : parts;
-  const value = selected.join("\n");
-  return value.length > maxChars ? `${value.slice(0, Math.max(maxChars - 20, 0)).trim()} ...[truncated]` : value;
-}
-
-export function attachThreadContext(tweet, contextTweets) {
-  const rawContext = contextTweets.filter((item) => item && typeof item === "object");
-  const maxChars = envInt("THREAD_CONTEXT_MAX_CHARS", envInt("REPLY_CONTEXT_MAX_CHARS", 2400));
-  const contextText = buildThreadContextText(rawContext, { currentTweetId: tweet.id, maxChars });
-  return {
-    ...tweet,
-    context_text: contextText,
-    context_tweets: rawContext,
-    raw: { ...(tweet.raw || {}), _thread_context: rawContext },
-  };
-}
-
-export function buildReviewItem(tweet, { contextStatus, contextItems, contextError = null }) {
+export function buildReviewItem(tweet) {
   const raw = tweet.raw || {};
-  const item = {
+  return {
     tweet_id: tweet.id,
     event_key: eventKeyForTweet(tweet),
     url: buildTweetUrl(tweet),
@@ -810,54 +506,26 @@ export function buildReviewItem(tweet, { contextStatus, contextItems, contextErr
     in_reply_to_username: raw.inReplyToUsername || null,
     text: tweet.text,
     reply_context: tweet.context_text || "",
-    context_status: contextStatus,
-    context_items: contextItems,
+    context_status: isReplyLike(raw) ? "not_available_in_public_feed" : "not_reply",
+    context_items: 0,
   };
-  if (contextError) item.context_error = contextError;
-  return item;
 }
 
-export async function processCandidates(candidates, { store, args, fetchThreadContextImpl = fetchThreadContext }) {
-  const includeReposts = envBool("INCLUDE_REPOSTS", false);
+export async function processCandidates(candidates, { store, args }) {
   const results = [];
   const reviewItems = [];
-  let contextFetches = 0;
 
   for (const tweet of candidates) {
     if (store.isSeen(tweet.id)) {
       results.push({ tweet_id: tweet.id, status: "already_seen" });
       continue;
     }
-
-    if (tweet.raw && isRepostLike(tweet.raw) && !includeReposts) {
-      if (!args.dryRun) store.markSeen(tweet.id);
-      results.push({ tweet_id: tweet.id, status: "ignored_repost", is_reply: isReplyLike(tweet.raw) });
+    if (!args.includeReplies && isReplyLike(tweet.raw)) {
+      results.push({ tweet_id: tweet.id, status: "ignored_reply", is_reply: true });
       continue;
     }
 
-    let reviewTweet = tweet;
-    let contextStatus = isReplyLike(tweet.raw) ? "disabled" : "not_reply";
-    let contextItems = 0;
-    let contextError = null;
-    if (args.hydrateReplyContext && isReplyLike(tweet.raw)) {
-      if (contextFetches < Math.max(args.threadContextMaxFetches, 0)) {
-        contextFetches += 1;
-        try {
-          const contextTweets = await fetchThreadContextImpl(tweet.id, { maxPages: Math.max(args.threadContextMaxPages, 1) });
-          reviewTweet = attachThreadContext(tweet, contextTweets);
-          contextItems = contextTweets.length;
-          contextStatus = reviewTweet.context_text ? "used" : "empty";
-        } catch (error) {
-          if (envBool("THREAD_CONTEXT_STRICT", false)) throw error;
-          contextStatus = "error";
-          contextError = sanitizeException(error);
-        }
-      } else {
-        contextStatus = "skipped_limit";
-      }
-    }
-
-    const item = buildReviewItem(reviewTweet, { contextStatus, contextItems, contextError });
+    const item = buildReviewItem(tweet);
     if (!args.dryRun) store.markSeen(tweet.id);
     reviewItems.push(item);
     results.push({
@@ -866,12 +534,12 @@ export async function processCandidates(candidates, { store, args, fetchThreadCo
       event_key: item.event_key,
       url: item.url,
       is_reply: item.is_reply,
-      context_status: contextStatus,
-      context_items: contextItems,
+      context_status: item.context_status,
+      context_items: item.context_items,
     });
   }
 
-  return { results, reviewItems, contextFetches };
+  return { results, reviewItems, contextFetches: 0 };
 }
 
 function parseBoolArg(value) {
@@ -890,16 +558,9 @@ function takeArg(argv, index) {
 
 export function parseArgs(argv = process.argv.slice(2)) {
   const args = {
-    handle: String(process.env.TARGET_X_HANDLE || "").trim(),
-    userId: String(process.env.TARGET_X_USER_ID || "").trim(),
-    fetchStrategy: String(process.env.FETCH_STRATEGY || "advanced_search").trim(),
+    handle: String(process.env.TARGET_X_HANDLE || DEFAULT_TARGET_X_HANDLE).trim().replace(/^@/, ""),
+    sourceUrl: String(process.env.DAYCLAW_SOURCE_ITEMS_URL || process.env.SOURCE_ITEMS_URL || "").trim(),
     includeReplies: envBool("INCLUDE_REPLIES", true),
-    maxPages: envInt("CHECK_ONCE_MAX_PAGES", 1),
-    incrementalOverlapSeconds: envInt("INCREMENTAL_OVERLAP_SECONDS", 300),
-    incrementalBootstrapLookbackSeconds: envInt("INCREMENTAL_BOOTSTRAP_LOOKBACK_SECONDS", 7200),
-    hydrateReplyContext: envBool("HYDRATE_REPLY_CONTEXT", envBool("ENRICH_REPLY_CONTEXT", true)),
-    threadContextMaxPages: envInt("THREAD_CONTEXT_MAX_PAGES", envInt("REPLY_CONTEXT_MAX_PAGES", 1)),
-    threadContextMaxFetches: envInt("THREAD_CONTEXT_MAX_FETCHES", envInt("REPLY_CONTEXT_MAX_FETCHES", 12)),
     alertOnFirstRun: envBool("ALERT_ON_FIRST_RUN", false),
     primeState: false,
     dryRun: false,
@@ -916,54 +577,34 @@ export function parseArgs(argv = process.argv.slice(2)) {
     else if (current === "--alert-on-first-run") args.alertOnFirstRun = true;
     else if (current.startsWith("--handle")) {
       const [, value, nextIndex] = takeArg(argv, index);
-      args.handle = String(value || "").replace(/^@/, "");
+      args.handle = String(value || "").replace(/^@/, ""); args.sourceUrl = "";
       index = nextIndex;
-    } else if (current.startsWith("--user-id")) {
+    } else if (current.startsWith("--source-url") || current.startsWith("--api-url")) {
       const [, value, nextIndex] = takeArg(argv, index);
-      args.userId = String(value || "");
+      args.sourceUrl = String(value || "");
       index = nextIndex;
     } else if (current.startsWith("--include-replies")) {
       const [, value, nextIndex] = takeArg(argv, index);
       args.includeReplies = parseBoolArg(value);
       index = nextIndex;
-    } else if (current.startsWith("--fetch-strategy")) {
-      const [, value, nextIndex] = takeArg(argv, index);
-      args.fetchStrategy = String(value || "").trim();
-      index = nextIndex;
-    } else if (current.startsWith("--max-pages")) {
-      const [, value, nextIndex] = takeArg(argv, index);
-      args.maxPages = Number.parseInt(value, 10);
-      index = nextIndex;
-    } else if (current.startsWith("--incremental-overlap-seconds")) {
-      const [, value, nextIndex] = takeArg(argv, index);
-      args.incrementalOverlapSeconds = Number.parseInt(value, 10);
-      index = nextIndex;
-    } else if (current.startsWith("--incremental-bootstrap-lookback-seconds")) {
-      const [, value, nextIndex] = takeArg(argv, index);
-      args.incrementalBootstrapLookbackSeconds = Number.parseInt(value, 10);
-      index = nextIndex;
     } else if (current.startsWith("--hydrate-reply-context") || current.startsWith("--enrich-reply-context")) {
       const [, value, nextIndex] = takeArg(argv, index);
       args.hydrateReplyContext = parseBoolArg(value);
       index = nextIndex;
-    } else if (current.startsWith("--thread-context-max-pages") || current.startsWith("--reply-context-max-pages")) {
-      const [, value, nextIndex] = takeArg(argv, index);
-      args.threadContextMaxPages = Number.parseInt(value, 10);
-      index = nextIndex;
-    } else if (current.startsWith("--thread-context-max-fetches") || current.startsWith("--reply-context-max-fetches")) {
-      const [, value, nextIndex] = takeArg(argv, index);
-      args.threadContextMaxFetches = Number.parseInt(value, 10);
+    } else if (current.startsWith("--fetch-strategy") || current.startsWith("--max-pages")) {
+      const [, , nextIndex] = takeArg(argv, index);
       index = nextIndex;
     } else {
       throw new Error(`Unknown argument: ${current}`);
     }
   }
 
-  if (!["advanced_search", "last_tweets"].includes(args.fetchStrategy)) {
-    throw new Error(`FETCH_STRATEGY/--fetch-strategy must be advanced_search or last_tweets, got ${JSON.stringify(args.fetchStrategy)}`);
-  }
-
+  args.sourceUrl = buildDayclawItemsUrl({ handle: args.handle, sourceUrl: args.sourceUrl });
   return args;
+}
+
+function targetLabel(args) {
+  return args.handle ? `@${args.handle}` : args.sourceUrl;
 }
 
 function transientNetworkSummary(error, store, args) {
@@ -980,7 +621,8 @@ function transientNetworkSummary(error, store, args) {
   const reportToTriage = stateError ? true : shouldReportOperationalFailure(failureCount, threshold, reportEvery);
   return {
     status: "transient_network_error",
-    target: args.userId || `@${args.handle}`,
+    target: targetLabel(args),
+    source_url: args.sourceUrl,
     fetched: 0,
     new_items: 0,
     review_count: 0,
@@ -997,7 +639,7 @@ function transientNetworkSummary(error, store, args) {
       report_every_failures: reportEvery,
       retry_next_run: true,
       state_error: stateError,
-      message: "Transient TwitterAPI.io network failure; keep automation active and retry on the next run.",
+      message: "Transient Dayclaw network failure; keep automation active and retry on the next run.",
     },
     results: [],
   };
@@ -1012,7 +654,8 @@ export function shouldReportOperationalFailure(count, threshold, reportEvery) {
 function runtimeErrorSummary(error, args, store = null) {
   return {
     status: "error",
-    target: args.userId || `@${args.handle}`,
+    target: targetLabel(args),
+    source_url: args.sourceUrl || null,
     fetched: 0,
     new_items: 0,
     review_count: 0,
@@ -1030,6 +673,11 @@ function runtimeErrorSummary(error, args, store = null) {
   };
 }
 
+function emptyFetchWarning(apiPages) {
+  if (!apiPages.length) return "Dayclaw public source returned no pages; check source URL.";
+  return "Dayclaw public source succeeded but no items were extracted. Inspect api_pages.response_keys and endpoint.";
+}
+
 export async function main() {
   loadRuntimeEnvironment();
   let args = null;
@@ -1038,8 +686,8 @@ export async function main() {
   } catch (error) {
     const wantsJson = process.argv.includes("--json");
     const fallbackArgs = {
-      handle: String(process.env.TARGET_X_HANDLE || "").replace(/^@/, ""),
-      userId: String(process.env.TARGET_X_USER_ID || ""),
+      handle: String(process.env.TARGET_X_HANDLE || DEFAULT_TARGET_X_HANDLE).replace(/^@/, ""),
+      sourceUrl: String(process.env.DAYCLAW_SOURCE_ITEMS_URL || process.env.SOURCE_ITEMS_URL || ""),
       dryRun: process.argv.includes("--dry-run"),
     };
     const summary = runtimeErrorSummary(error, fallbackArgs);
@@ -1047,13 +695,13 @@ export async function main() {
     else console.log(summary.operational_error.detail);
     return 1;
   }
-  args.handle = args.handle.replace(/^@/, "");
 
   if (args.diagnoseNetwork) {
-    const diagnostic = await diagnoseNetwork({ handle: args.handle || null, userId: args.userId || null });
+    const diagnostic = await diagnoseNetwork({ sourceUrl: args.sourceUrl });
     const summary = {
       status: "network_diagnostic",
-      target: args.userId || (args.handle ? `@${args.handle}` : null),
+      target: targetLabel(args),
+      source_url: args.sourceUrl,
       ...diagnostic,
     };
     if (args.json) console.log(prettyJson(summary));
@@ -1062,42 +710,39 @@ export async function main() {
   }
 
   const store = new DedupeStore();
-
-  let rawTweets = [];
+  let payload = null;
+  let rawItems = [];
   let apiPages = [];
-  let fetchStrategy = args.fetchStrategy;
-  let checkpointKey = monitorCheckpointKey(args);
-  let checkpointPatch = null;
+
   try {
-    const fetched = await fetchTweetsForRun({ args, store });
-    rawTweets = fetched.tweets;
-    apiPages = fetched.pages;
-    fetchStrategy = fetched.fetchStrategy;
-    checkpointKey = fetched.checkpointKey;
-    checkpointPatch = fetched.checkpointPatch;
+    const fetched = await fetchSourceItems({ sourceUrl: args.sourceUrl });
+    payload = fetched.payload;
+    rawItems = fetched.rawItems;
+    apiPages = fetched.apiPages;
     store.clearOperationalFailure(NETWORK_FAILURE_KEY);
   } catch (error) {
     const summary =
-      error instanceof TwitterAPITransientError
+      error instanceof DayclawTransientError
         ? transientNetworkSummary(error, store, args)
         : runtimeErrorSummary(error, args, store);
     if (args.json) console.log(prettyJson(summary));
     else console.log(summary.operational_error?.message || summary.operational_error?.detail || "Runtime error");
-    if (error instanceof TwitterAPITransientError) {
+    if (error instanceof DayclawTransientError) {
       return envBool("TRANSIENT_NETWORK_ERRORS_EXIT_ZERO", true) ? 0 : 75;
     }
     return 1;
   }
 
   try {
-    const candidates = extractTweets({ tweets: rawTweets.sort(tweetSortKeyCompare) });
+    const candidates = rawItems.map(normalizeSourceItem).filter(Boolean).sort(tweetSortKeyCompare);
     const initialRun = store.count() === 0;
     if (args.primeState || (initialRun && !args.alertOnFirstRun && !args.dryRun)) {
       store.markManySeen(candidates.map((tweet) => tweet.id));
-      if (!args.dryRun && checkpointPatch) store.updateCheckpoint(checkpointKey, checkpointPatch);
       const summary = {
         status: initialRun ? "primed" : "state_updated",
-        fetch_strategy: fetchStrategy,
+        target: targetLabel(args),
+        source_url: args.sourceUrl,
+        fetch_strategy: "dayclaw_public_items",
         fetched: candidates.length,
         marked_seen: candidates.length,
         api_pages: apiPages,
@@ -1106,36 +751,36 @@ export async function main() {
         review_count: 0,
         has_review_items: false,
         review_items: [],
-        note: "First run baseline: no old tweets were sent to LLM review. Set ALERT_ON_FIRST_RUN=true to review historical tweets.",
+        note: "First run baseline: no old items were sent to LLM review. Set ALERT_ON_FIRST_RUN=true to review historical items.",
       };
-      console.log(args.json ? prettyJson(summary) : `Primed ${candidates.length} tweets; no review items emitted.`);
+      console.log(args.json ? prettyJson(summary) : `Primed ${candidates.length} items; no review items emitted.`);
       return 0;
     }
-
     const { results, reviewItems, contextFetches } = await processCandidates(candidates, { store, args });
-    if (!args.dryRun && checkpointPatch) store.updateCheckpoint(checkpointKey, checkpointPatch);
     const summary = {
       status: "ok",
-      target: args.userId || `@${args.handle}`,
-      fetch_strategy: fetchStrategy,
+      target: targetLabel(args),
+      source_url: args.sourceUrl,
+      fetch_strategy: "dayclaw_public_items",
       fetched: candidates.length,
       new_items: reviewItems.length,
       api_pages: apiPages,
       api_warning: candidates.length === 0 ? emptyFetchWarning(apiPages) : null,
+      source: payload?.source || null,
       state: store.info(),
       reply_context_fetches: contextFetches,
       review_count: reviewItems.length,
       has_review_items: reviewItems.length > 0,
       review_items: reviewItems,
       llm_instruction:
-        "Review every item in review_items. Report a Codex Triage finding only if the tweet/reply or its context probably announces, confirms, schedules, completes, or remediates a Codex usage/quota/rate-limit reset/refill/restored allowance. If none qualify, archive this run with no finding.",
+        "Review every item in review_items. Report a Codex Triage finding only if the item probably announces, confirms, schedules, completes, or remediates a Codex usage/quota/rate-limit reset/refill/restored allowance. If none qualify, archive this run with no finding.",
       notification_surface: "codex_automation_triage",
       dry_run: Boolean(args.dryRun),
       results,
     };
 
     if (args.json) console.log(prettyJson(summary));
-    else console.log(`Checked ${summary.target}: ${summary.new_items} new tweets/replies queued for LLM review.`);
+    else console.log(`Checked ${summary.target}: ${summary.new_items} new items queued for LLM review.`);
     return 0;
   } catch (error) {
     const summary = runtimeErrorSummary(error, args, store);
@@ -1145,13 +790,4 @@ export async function main() {
   }
 }
 
-function emptyFetchWarning(apiPages) {
-  if (apiPages.some((page) => page?.source === "advanced_search")) return null;
-  if (!apiPages.length) return "TwitterAPI.io returned no pages; check target handle/user id and API response.";
-  return "TwitterAPI.io call succeeded but no tweets were extracted. Inspect api_pages.response_keys/data_keys and try --user-id if the handle path returns an empty batch.";
-}
-
-if (import.meta.url === pathToFileURL(process.argv[1] || "").href) {
-  const code = await main();
-  process.exit(code);
-}
+if (import.meta.url === pathToFileURL(process.argv[1] || "").href) process.exit(await main());

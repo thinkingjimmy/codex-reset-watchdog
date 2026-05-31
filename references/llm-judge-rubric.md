@@ -1,6 +1,6 @@
 # Codex Automation LLM judge rubric
 
-Use this rubric for every item in `review_items` emitted by `scripts/check_once.mjs`. The Node script has already fetched the tweet/reply and any available thread context; do not infer missing thread content.
+Use this rubric for every item in `review_items` emitted by `scripts/check_once.mjs`. The Node script has fetched the Dayclaw public source item and preserved available metadata; do not infer missing thread content.
 
 ## Promote to a Triage finding when
 
@@ -8,7 +8,7 @@ The item probably means one of these:
 
 - Codex usage limits, weekly limits, quotas, rate limits, caps, credits, allowance, or capacity will be reset, refilled, restored, replenished, topped up, raised, or otherwise made good.
 - A reset/refill/remediation is scheduled or expected soon: later today, tomorrow, this week, after a deploy, after an incident, or similar.
-- The target author gives a terse affirmative reply to a thread that clearly asks about Codex quota/usage reset, for example “yes”, “that’s the plan”, “working on it”, “soon”, “later today”, or “after the deploy”.
+- The target author gives a terse affirmative reply only when the provided item text or metadata makes the Codex quota/usage reset context clear.
 - The wording avoids the word “reset” but means the same operational outcome, for example “affected users should get their weekly allowance back” or “we’ll take care of folks who hit the limit because of the incident”.
 
 ## Do not promote when
@@ -17,16 +17,16 @@ The item probably means one of these:
 - The author negates the reset: no, nope, no reset, not planned, won’t, cannot, not doing that.
 - The context is too vague to connect it to Codex usage/quota/rate limits.
 - The tweet is only a generic outage/status update with no limit reset, refill, restored allowance, compensation, or make-good meaning.
-- The judgment relies on speculation outside the provided tweet and fetched thread context.
+- The judgment relies on speculation outside the provided item text and metadata.
 
 ## Output expectation inside Codex Automation
 
 If you promote an item, create one concise Codex Triage finding containing:
 
 - why it likely signals a Codex reset/refill/restored allowance/remediation;
-- tweet text and reply context when relevant;
+- item text and available context when relevant;
 - author, created time, URL, and event key.
 
-If several items are clearly the same reset event in the same thread, report only the strongest one. Mention that duplicates were ignored.
+If several items are clearly the same reset event, report only the strongest one. Mention that duplicates were ignored.
 
 If no item should be promoted, archive the Automation run with no finding.

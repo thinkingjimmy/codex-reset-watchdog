@@ -1,6 +1,6 @@
 interface:
   display_name: "Codex Reset Watchdog"
   short_description: "LLM-first monitoring for Codex reset announcements, surfaced via Codex Automation/Triage."
-  default_prompt: "Install or set up the zero-dependency Dayclaw public-source watchdog, run self-test and state priming, then create an hourly Codex Automation. Runs should return a concise health summary and report in Triage only when a Codex usage, quota, or rate-limit reset signal is present."
+  default_prompt: "Install or set up the zero-dependency Dayclaw public-source watchdog, run self-test and state priming, then create an hourly Codex Automation. Runs should return a concise reset/no-reset report with a fetched-items table and report in Triage only when a Codex usage, quota, or rate-limit reset signal is present."
 policy:
   allow_implicit_invocation: true

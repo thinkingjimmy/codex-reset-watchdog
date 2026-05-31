@@ -12,7 +12,7 @@
 - 只在值得注意时打扰：没有 reset / refill / restored allowance 信号时不发 Triage、不写 routine memory。
 - 不重复提醒：同一个 item 只处理一次，后续新消息仍可继续触发。
 - 网络抖动不刷屏：短暂 Dayclaw DNS/network 失败不会立刻变成噪声告警。
-- Automation 运行结果返回人话总结：用户点 Test 或查看 run log 时，不应该看到整坨 JSON。
+- Automation 运行结果返回可审阅报告：用户点 Test 或查看 run log 时，应该看到 fetched items 表格，而不是整坨 JSON。
 - 通知面单一：所有结果只进入 Codex Automation / Triage，不外发到聊天软件或 webhook。
 
 ## Skill 结构
@@ -84,16 +84,21 @@ Codex 会先验证脚本能跑，再把当前已有 public items 标记为基线
 
 ## Test 应该显示什么
 
-Setup 后，点击 Codex Automations 里的 **Test**。Codex 对 Test 和定时运行使用同一份 Automation prompt，所以每次运行都会用一段简短 LLM 总结收尾，例如：
+Setup 后，点击 Codex Automations 里的 **Test**。Codex 对 Test 和定时运行使用同一份 Automation prompt，所以每次运行都会用一段简短 Markdown 报告收尾，例如：
 
 ```text
 未发现 Codex reset 信号。
-- 当前 fetched items 提到了 Codex / 产品更新，但没有 usage、quota、rate-limit reset、refill 或 restored allowance。
-- 新 item：0；review items：0；没有创建 Triage finding。
-- Source 健康；下一次 hourly run 会继续监控 Dayclaw public feed。
+
+| 时间 | Reset? | 内容 | 链接 |
+| --- | --- | --- | --- |
+| 2026-05-29 01:40 | no | Codex Thursday 改到 Friday；没有 usage/quota reset 语义。 | link |
+| 2026-05-27 14:59 | no | Codex model availability 更新；没有 allowance refill 或 rate-limit reset。 | link |
+
+Fetched：10；新 item：0；review items：0；Triage finding：无。
+Source 健康。
 ```
 
-结果不应该直接贴 `check_once.mjs --json` 的完整对象。健康 no-op 运行不应创建 Triage finding、不应外发通知、不应写 routine memory；简短总结可以出现在 Automation run log 和 Test 结果里。
+结果不应该直接贴 `check_once.mjs --json` 的完整对象。健康 no-op 运行不应创建 Triage finding、不应外发通知、不应写 routine memory；简短报告可以出现在 Automation run log 和 Test 结果里。
 
 ## 状态与去重
 
@@ -120,7 +125,7 @@ STATE_FILE_PATH=var/state.json
 - `review_count`：交给 LLM 审阅的新 item 数量。
 - `has_review_items`：`review_items` 是否非空。
 - `review_items`：所有新的未见 item，包含正文、URL、作者、回复元数据、event key 和可用上下文字段。
-- `fetched_items`：当前 fetched batch 的只读摘要；即使所有 item 都已见过，也用于生成面向人的 reset 总结。
+- `fetched_items`：当前 fetched batch 的只读摘要；即使所有 item 都已见过，也用于生成面向人的审阅表格。
 - `api_pages`：API 返回摘要，包括返回键、source URL、limit 和提取到的 item 数量。
 - `api_warning`：API 成功但没有提取到任何 item 时出现。
 - `state`：实际使用的状态文件路径、用户请求的路径、是否发生 fallback，以及相关 warning。

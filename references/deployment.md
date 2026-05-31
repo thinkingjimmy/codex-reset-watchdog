@@ -102,18 +102,23 @@ Known pitfalls:
 
 ## Run summary behavior
 
-Codex Automations may use the same prompt for the Test button and scheduled runs. Because the prompt cannot reliably distinguish them, every run should end with an LLM summary rather than raw JSON.
+Codex Automations may use the same prompt for the Test button and scheduled runs. Because the prompt cannot reliably distinguish them, every run should end with a reviewable Markdown report rather than raw JSON.
 
 A healthy no-op run after priming should say:
 
 ```text
 No Codex reset signal found.
-- Current fetched items mention Codex/product updates, but not usage/quota/rate-limit reset, refill, or restored allowance.
-- New items: 0; review items: 0; no Triage finding created.
-- Source is healthy; next hourly run will keep watching the Dayclaw public feed.
+
+| Time | Reset? | Item | Link |
+| --- | --- | --- | --- |
+| 2026-05-29 01:40 | no | Codex Thursday moved to Friday; no usage/quota reset language. | link |
+| 2026-05-27 14:59 | no | Codex model availability update; no allowance refill or rate-limit reset. | link |
+
+Fetched: 10; new items: 0; review items: 0; Triage finding: none.
+Source is healthy.
 ```
 
-Healthy no-op runs should not create Triage findings, external notifications, or routine automation memory. The concise summary is safe for Automation run logs and Test results.
+Healthy no-op runs should not create Triage findings, external notifications, or routine automation memory. The concise report is safe for Automation run logs and Test results.
 
 ## Public source model
 
@@ -230,7 +235,7 @@ OPERATIONAL_ERROR_REPORT_EVERY_FAILURES=24
 
 Do not report scheduled findings when there are simply no new items, no positive LLM judgments, or a non-reportable transient network status. Transient network errors report on the threshold failure, then only every `OPERATIONAL_ERROR_REPORT_EVERY_FAILURES` failures while the outage continues.
 
-Do not write automation memory for routine successful no-op runs. After state is primed, repeated output such as `status=ok`, `new_items=0`, and `review_count=0` is expected and should produce only the concise run summary, with no Triage finding.
+Do not write automation memory for routine successful no-op runs. After state is primed, repeated output such as `status=ok`, `new_items=0`, and `review_count=0` is expected and should produce only the concise run report, with no Triage finding.
 
 ## Useful links
 

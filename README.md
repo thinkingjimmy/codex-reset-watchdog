@@ -12,7 +12,7 @@ A zero-dependency Codex skill repo for monitoring [`@thsottiaux`](https://x.com/
 - Stays quiet when nothing matters: no reset/refill/restored-allowance signal means no finding.
 - Avoids repeat noise: the same item is handled once, while future new posts remain eligible.
 - Handles network blips calmly: transient Dayclaw DNS/network failures do not immediately spam Triage.
-- Makes Automation runs readable: the run result should be a short LLM summary, not raw JSON.
+- Makes Automation runs readable: the run result should be a short Markdown report with a fetched-items review table, not raw JSON.
 - Keeps one notification surface: findings appear only in Codex Automation/Triage, not external channels.
 
 ## Skill Layout
@@ -82,16 +82,21 @@ Codex will verify the script, prime the current public items as the baseline, th
 
 ## What Test Should Show
 
-After setup, click **Test** in Codex Automations. Codex uses the same Automation prompt for Test and scheduled runs, so every run ends with a short LLM summary like:
+After setup, click **Test** in Codex Automations. Codex uses the same Automation prompt for Test and scheduled runs, so every run ends with a short Markdown report like:
 
 ```text
 No Codex reset signal found.
-- Current fetched items mention Codex/product updates, but not usage/quota/rate-limit reset, refill, or restored allowance.
-- New items: 0; review items: 0; no Triage finding created.
-- Source is healthy; next hourly run will keep watching the Dayclaw public feed.
+
+| Time | Reset? | Item | Link |
+| --- | --- | --- | --- |
+| 2026-05-29 01:40 | no | Codex Thursday moved to Friday; no usage/quota reset language. | link |
+| 2026-05-27 14:59 | no | Codex model availability update; no allowance refill or rate-limit reset. | link |
+
+Fetched: 10; new items: 0; review items: 0; Triage finding: none.
+Source is healthy.
 ```
 
-The result should not paste the raw `check_once.mjs --json` object. Healthy no-op runs should not create Triage findings, external notifications, or routine automation memory; the concise summary is safe to show in Automation run logs and Test results.
+The result should not paste the raw `check_once.mjs --json` object. Healthy no-op runs should not create Triage findings, external notifications, or routine automation memory; the concise report is safe to show in Automation run logs and Test results.
 
 ## State And Dedupe
 
@@ -118,7 +123,7 @@ STATE_FILE_PATH=var/state.json
 - `review_count`: number of new unseen items emitted for LLM review.
 - `has_review_items`: whether `review_items` is non-empty.
 - `review_items`: all new unseen items with text, URL, author, reply metadata, event key, and available context fields.
-- `fetched_items`: read-only summary of the current fetched batch, used for human summaries even when all items were already seen.
+- `fetched_items`: read-only summary of the current fetched batch, used for the human review table even when all items were already seen.
 - `api_pages`: API diagnostics, including response keys, source URL, limit, and extracted item count.
 - `api_warning`: present when the API succeeds but no item can be extracted.
 - `state`: actual state file path, requested path, fallback status, and related warnings.

@@ -94,18 +94,22 @@ Every scheduled run should follow this protocol:
 6. If JSON `status` is `transient_network_error`, create an operational finding only when `operational_error.report_to_triage` is true. For repeated network/fetch failures, run `node scripts/check_once.mjs --diagnose-network --json` and include `dns`, `http`, `network_ok`, and `hint`.
 7. If `api_warning` is present, create one operational finding with `source_url`, `fetched`, `api_warning`, and `api_pages`.
 8. If `review_items` is non-empty, judge every item with `references/llm-judge-rubric.md`. Create a Triage finding only for new items that probably announce, confirm, schedule, complete, or remediate a Codex usage/quota/rate-limit reset, refill, restored allowance, or make-good.
-9. Use `fetched_items` for the human summary even when `review_items` is empty because the state was already primed. Do not create Triage findings from already-seen `fetched_items`; they are context for the summary only.
-10. Always end with a concise reset-focused run summary. The first sentence should answer the user’s actual question: `No Codex reset signal found` or `Codex reset signal found`.
+9. Use `fetched_items` for the human report even when `review_items` is empty because the state was already primed. Do not create Triage findings from already-seen `fetched_items`; they are context for the review table only.
+10. Always end with a concise reset-focused Markdown report. The first sentence should answer the user’s actual question: `No Codex reset signal found` or `Codex reset signal found`.
 11. Do not read or write automation memory for routine runs. Write memory only for setup completion, configuration changes, positive reset findings, reportable operational errors, or explicit user-requested diagnostics.
 
-Run summaries should be short:
+Run reports should be short and reviewable:
 
 - explain the reset/no-reset conclusion using fetched item wording;
+- include a Markdown table for `fetched_items` with columns `Time`, `Reset?`, `Item`, and `Link`;
+- include all fetched rows when there are 10 or fewer; if there are more, show the newest 10 and say how many were omitted;
+- set `Reset?` to `yes`, `no`, or `unclear`; one unclear row is enough reason to mention that a human should review it;
+- keep each `Item` cell to one concise sentence and use the item URL as a short Markdown link;
 - include `new_items` / `review_count` and whether a Triage finding was created;
 - mention source health only when useful;
-- avoid process narration such as checking memory, choosing paths, or restating every command.
+- avoid process narration such as checking memory, waiting for commands, choosing paths, writing memory, or restating every command.
 
-The Automation prompt cannot reliably know whether a run came from the Test button or the schedule. Use the same reset-focused summary for both.
+The Automation prompt cannot reliably know whether a run came from the Test button or the schedule. Use the same reset-focused report for both.
 
 ## Reset judgment policy
 
@@ -217,7 +221,7 @@ Then it should:
 - if multiple items are clearly the same event, report only the strongest one;
 - report command failures or repeated source errors when likely to cause missed detections;
 - create no Triage finding when there are no review items, no positive LLM judgment, and no reportable operational errors;
-- return a concise human run summary, including source reachability, state path, fetched/new counts, and reset finding status; do not rely on knowing whether the run came from the Test button or the schedule;
+- return a concise human Markdown report with a fetched-items table, source reachability, fetched/new counts, and reset finding status; do not rely on knowing whether the run came from the Test button or the schedule;
 - do not write automation memory for routine `status=ok`, `new_items=0`, `review_count=0` runs.
 
 Do not run `self_test`, `--prime-state`, or `--dry-run` during ordinary scheduled runs. They are setup/pre-enable checks only.
@@ -231,7 +235,7 @@ Do not run `self_test`, `--prime-state`, or `--dry-run` during ordinary schedule
 - `review_count`: number of new unseen items emitted for LLM review.
 - `has_review_items`: boolean; true when `review_items` is non-empty.
 - `review_items`: structured new items with text, URL, author, event key, created time, and reply metadata when available.
-- `fetched_items`: read-only summary of the current fetched batch; use it for human reset/no-reset summaries, but create Triage findings only from qualifying new `review_items`.
+- `fetched_items`: read-only summary of the current fetched batch; use it for the human reset/no-reset table, but create Triage findings only from qualifying new `review_items`.
 - `api_pages`: API diagnostics with response keys, source URL, limit, and extracted item count.
 - `api_warning`: present when the API succeeds but no item can be extracted.
 - `fetch_strategy`: fixed to `dayclaw_public_items`.

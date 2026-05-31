@@ -780,7 +780,7 @@ export async function main() {
       review_items: reviewItems,
       fetched_items: candidates.map(buildFetchedItem),
       llm_instruction:
-        "First answer whether the fetched_items contain a Codex usage/quota/rate-limit reset/refill/restored-allowance signal. Report a Codex Triage finding only for qualifying new review_items. If none qualify, return a concise no-reset summary.",
+        "First answer whether fetched_items contain a Codex usage/quota/rate-limit reset/refill/restored-allowance signal. Include a Markdown table reviewing fetched_items. Report a Codex Triage finding only for qualifying new review_items. Do not output process narration, raw JSON, or routine memory notes.",
       notification_surface: "codex_automation_triage",
       dry_run: Boolean(args.dryRun),
       results,

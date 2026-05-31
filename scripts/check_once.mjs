@@ -511,6 +511,11 @@ export function buildReviewItem(tweet) {
   };
 }
 
+export function buildFetchedItem(tweet) {
+  const raw = tweet.raw || {};
+  return { tweet_id: tweet.id, url: buildTweetUrl(tweet), created_at: tweet.created_at, author: tweet.author_username, is_reply: isReplyLike(raw), text: tweet.text };
+}
+
 export async function processCandidates(candidates, { store, args }) {
   const results = [];
   const reviewItems = [];
@@ -751,6 +756,7 @@ export async function main() {
         review_count: 0,
         has_review_items: false,
         review_items: [],
+        fetched_items: candidates.map(buildFetchedItem),
         note: "First run baseline: no old items were sent to LLM review. Set ALERT_ON_FIRST_RUN=true to review historical items.",
       };
       console.log(args.json ? prettyJson(summary) : `Primed ${candidates.length} items; no review items emitted.`);
@@ -772,8 +778,9 @@ export async function main() {
       review_count: reviewItems.length,
       has_review_items: reviewItems.length > 0,
       review_items: reviewItems,
+      fetched_items: candidates.map(buildFetchedItem),
       llm_instruction:
-        "Review every item in review_items. Report a Codex Triage finding only if the item probably announces, confirms, schedules, completes, or remediates a Codex usage/quota/rate-limit reset/refill/restored allowance. If none qualify, archive this run with no finding.",
+        "First answer whether the fetched_items contain a Codex usage/quota/rate-limit reset/refill/restored-allowance signal. Report a Codex Triage finding only for qualifying new review_items. If none qualify, return a concise no-reset summary.",
       notification_surface: "codex_automation_triage",
       dry_run: Boolean(args.dryRun),
       results,

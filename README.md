@@ -59,9 +59,15 @@ After installation:
 5. Create an hourly Codex Automation:
    - working directory: the installed codex-reset-watchdog folder
    - command: node scripts/check_once.mjs --json
-   - prompt: use the full contents of references/automation-prompt.md exactly
+   - prompt: use the full contents of references/automation-prompt.md exactly; it is a thin launcher that tells Automation to use the skill
    - permissions: use the project .codex/config.toml profile codex-reset-watchdog-net if available; otherwise grant only workspace write plus outbound HTTPS to apitest.dayclaw.com
-6. Give me a concise setup summary with pass/fail status, Automation cadence, working directory, state path, and what the Codex Test button should show.
+6. When calling the Codex Automation creation tool, do not guess its parameter shape:
+   - inspect the tool schema or an existing Automation config first;
+   - use the current tool's accepted hourly schedule format, preferably an iCalendar RRULE with DTSTART if plain "hourly" is rejected;
+   - pass the working directory in the exact cwd/cwds shape the current tool expects;
+   - include model and reasoning fields if the current tool requires them even when marked optional;
+   - after creation, read the Automation back and confirm cadence, working directory, active status, command, and prompt.
+7. Give me a concise setup summary with pass/fail status, Automation cadence, working directory, state path, and what the Codex Test button should show.
 
 Do not paste raw JSON unless I ask for it. Do not enable full access unless the narrow network permission path is unavailable and you explain the tradeoff first.
 ```
@@ -72,18 +78,17 @@ There is no API key to buy or paste. The default source is:
 https://apitest.dayclaw.com/api/source/public/x/thsottiaux/items
 ```
 
-Codex will verify the script, prime the current public items as the baseline, then create the scheduled Automation using the full contents of [`references/automation-prompt.md`](references/automation-prompt.md). The LLM judging rubric lives in [`references/llm-judge-rubric.md`](references/llm-judge-rubric.md). These files are the source of truth; do not let Codex invent a different runtime prompt.
+Codex will verify the script, prime the current public items as the baseline, then create the scheduled Automation using the full contents of [`references/automation-prompt.md`](references/automation-prompt.md). That prompt is intentionally small; [`SKILL.md`](SKILL.md) is the runtime source of truth, and [`references/llm-judge-rubric.md`](references/llm-judge-rubric.md) is the reset judgment rubric.
 
 ## What Test Should Show
 
 After setup, click **Test** in Codex Automations. Codex uses the same Automation prompt for Test and scheduled runs, so every run ends with a short LLM summary like:
 
 ```text
-Codex Reset Watchdog is healthy.
-- Dayclaw public source is reachable.
-- State is persistent at var/state.json.
-- No new public items were found since the primed baseline.
-- No Codex usage/quota/rate-limit reset signal was reported.
+No Codex reset signal found.
+- Current fetched items mention Codex/product updates, but not usage/quota/rate-limit reset, refill, or restored allowance.
+- New items: 0; review items: 0; no Triage finding created.
+- Source is healthy; next hourly run will keep watching the Dayclaw public feed.
 ```
 
 The result should not paste the raw `check_once.mjs --json` object. Healthy no-op runs should not create Triage findings, external notifications, or routine automation memory; the concise summary is safe to show in Automation run logs and Test results.
@@ -113,6 +118,7 @@ STATE_FILE_PATH=var/state.json
 - `review_count`: number of new unseen items emitted for LLM review.
 - `has_review_items`: whether `review_items` is non-empty.
 - `review_items`: all new unseen items with text, URL, author, reply metadata, event key, and available context fields.
+- `fetched_items`: read-only summary of the current fetched batch, used for human summaries even when all items were already seen.
 - `api_pages`: API diagnostics, including response keys, source URL, limit, and extracted item count.
 - `api_warning`: present when the API succeeds but no item can be extracted.
 - `state`: actual state file path, requested path, fallback status, and related warnings.

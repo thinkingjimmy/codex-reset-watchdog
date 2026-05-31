@@ -84,7 +84,21 @@ Codex Automation should run hourly:
 node scripts/check_once.mjs --json
 ```
 
+Use the full contents of `references/automation-prompt.md` as the Automation prompt. It is intentionally thin and delegates behavior to `SKILL.md`; do not copy the full run protocol into the Automation prompt.
+
 Setup-only commands are `node scripts/self_test.mjs`, `node scripts/check_once.mjs --prime-state --json`, and `node scripts/check_once.mjs --dry-run --json`. Do not run them on every schedule.
+
+## Automation creation compatibility
+
+Do not guess the Codex Automation tool's parameter shape. Before creating or updating the Automation, inspect the current tool schema or read an existing Automation config from the same Codex version.
+
+Known pitfalls:
+
+- Some versions reject plain cadence strings; use the tool's accepted hourly format, preferably iCalendar `DTSTART` plus `RRULE:FREQ=HOURLY;INTERVAL=1`.
+- Some versions distinguish `cwd` string from `cwds` list; pass exactly what the current schema accepts.
+- Some versions require `model` and `reasoning` during cron creation even when the schema marks them optional.
+- Prompt length is not the first suspect; validate schedule/model/cwd shape before shortening the prompt.
+- After creation, read the Automation back and confirm active status, cadence, working directory, command, and prompt.
 
 ## Run summary behavior
 
@@ -93,11 +107,10 @@ Codex Automations may use the same prompt for the Test button and scheduled runs
 A healthy no-op run after priming should say:
 
 ```text
-Codex Reset Watchdog is healthy.
-- Dayclaw public source is reachable.
-- State is persistent at var/state.json.
-- No new public items were found since the primed baseline.
-- No Codex usage/quota/rate-limit reset signal was reported.
+No Codex reset signal found.
+- Current fetched items mention Codex/product updates, but not usage/quota/rate-limit reset, refill, or restored allowance.
+- New items: 0; review items: 0; no Triage finding created.
+- Source is healthy; next hourly run will keep watching the Dayclaw public feed.
 ```
 
 Healthy no-op runs should not create Triage findings, external notifications, or routine automation memory. The concise summary is safe for Automation run logs and Test results.

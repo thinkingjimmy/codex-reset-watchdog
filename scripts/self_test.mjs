@@ -8,6 +8,7 @@ import {
   DEFAULT_STATE_FILE_PATH,
   DedupeStore,
   buildDayclawItemsUrl,
+  buildFetchedItem,
   buildReviewItem,
   eventKeyForTweet,
   extractItems,
@@ -65,6 +66,7 @@ async function main() {
     const normalized = normalizeSourceItem(high);
     assert.equal(normalized.author_username, "target");
     assert.equal(eventKeyForTweet(normalized), "100");
+    assert.equal(buildFetchedItem(normalized).text, high.content);
     assert.equal(buildReviewItem(normalizeSourceItem(reply)).context_status, "not_available_in_public_feed");
 
     const store = new DedupeStore(path.join(tmp, "state.json"));

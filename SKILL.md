@@ -72,15 +72,46 @@ Use a persistent `STATE_FILE_PATH`. The default is `var/state.json` inside the p
 - `README.zh-CN.md`: Chinese usage tutorial with links.
 - `scripts/check_once.mjs`: zero-dependency Node Dayclaw public-source check; the recommended entrypoint for Codex Automation.
 - `scripts/self_test.mjs`: local deterministic tests with no network calls.
-- `references/automation-prompt.md`: durable Codex Automation prompt to paste into the app.
+- `references/automation-prompt.md`: thin Codex Automation launcher prompt; durable processing rules live in this skill.
 - `references/llm-judge-rubric.md`: rubric for judging `review_items` inside Codex Automation.
 - `references/deployment.md`: setup and operating notes.
 
-## Automation prompt source of truth
+## Runtime source of truth
 
-When creating or updating the Codex Automation, use the full contents of `references/automation-prompt.md` as the Automation prompt. Do not summarize, freestyle, or replace it with an improvised prompt. The README instruction is only a user-facing wrapper that asks Codex to create the Automation; the durable runtime contract lives in `references/automation-prompt.md`.
+`SKILL.md` is the durable runtime contract. `references/automation-prompt.md` should stay thin: it tells Codex Automation to use this skill and run the standard command, but the processing rules live here.
 
-Use `references/llm-judge-rubric.md` as the judging rubric referenced by that prompt. If behavior changes, update these reference files first, then update README/SKILL descriptions to match.
+Use `references/llm-judge-rubric.md` as the judging rubric for `review_items`. If behavior changes, update this skill first, then keep the README and thin Automation prompt aligned.
+
+## Automation run protocol
+
+Every scheduled run should follow this protocol:
+
+1. Work from the Automation working directory that contains `SKILL.md` and `scripts/check_once.mjs`.
+2. Run `node scripts/check_once.mjs --json`.
+3. Parse the JSON. Never paste the full JSON object into the user-facing run result unless debugging was explicitly requested.
+4. If the command fails before parseable JSON is produced, create one Codex Triage operational finding with sanitized command output.
+5. If JSON `status` is `error`, create one operational finding with `operational_error.detail`.
+6. If JSON `status` is `transient_network_error`, create an operational finding only when `operational_error.report_to_triage` is true. For repeated network/fetch failures, run `node scripts/check_once.mjs --diagnose-network --json` and include `dns`, `http`, `network_ok`, and `hint`.
+7. If `api_warning` is present, create one operational finding with `source_url`, `fetched`, `api_warning`, and `api_pages`.
+8. If `review_items` is non-empty, judge every item with `references/llm-judge-rubric.md`. Create a Triage finding only for new items that probably announce, confirm, schedule, complete, or remediate a Codex usage/quota/rate-limit reset, refill, restored allowance, or make-good.
+9. Use `fetched_items` for the human summary even when `review_items` is empty because the state was already primed. Do not create Triage findings from already-seen `fetched_items`; they are context for the summary only.
+10. Always end with a concise reset-focused run summary. The first sentence should answer the user’s actual question: `No Codex reset signal found` or `Codex reset signal found`.
+11. Do not read or write automation memory for routine runs. Write memory only for setup completion, configuration changes, positive reset findings, reportable operational errors, or explicit user-requested diagnostics.
+
+Run summaries should be short:
+
+- explain the reset/no-reset conclusion using fetched item wording;
+- include `new_items` / `review_count` and whether a Triage finding was created;
+- mention source health only when useful;
+- avoid process narration such as checking memory, choosing paths, or restating every command.
+
+The Automation prompt cannot reliably know whether a run came from the Test button or the schedule. Use the same reset-focused summary for both.
+
+## Reset judgment policy
+
+Promote when the item probably says Codex usage limits, weekly limits, quotas, rate limits, caps, credits, allowance, or capacity will be reset, refilled, restored, replenished, topped up, raised, or made good.
+
+Do not promote when “reset” refers to git, branches, local workspace, cache, CLI config, password, tokens, settings, database, environment, session, UI reset button, or when the item negates a reset.
 
 ## One-prompt install workflow
 
@@ -109,6 +140,8 @@ Summarize setup in human language:
 - what the Codex Automations **Test** button should show.
 
 Do not paste the full JSON output unless debugging.
+
+When creating the Automation, inspect the current Automation tool schema or an existing Automation config before calling create/update. Current Codex versions may reject guessed parameters. Use an accepted hourly schedule shape, preferably iCalendar `DTSTART` plus `RRULE:FREQ=HOURLY;INTERVAL=1` when plain text cadence fails. Pass the working directory in the exact `cwd`/`cwds` shape the tool expects. Include `model` and `reasoning` if the tool rejects the request without them, even if they appear optional. After creation, read the Automation back and verify cadence, working directory, active status, command, and prompt.
 
 ## Maintainer workflow
 
@@ -167,7 +200,7 @@ node scripts/check_once.mjs --diagnose-network --json
 
 ### 6. Create a Codex Automation
 
-Use the **full contents** of `references/automation-prompt.md` as the Automation prompt. The default cadence is hourly because reset posts are usually advance notices rather than instant events.
+Use the **full contents** of `references/automation-prompt.md` as the Automation prompt. Keep that prompt thin; this skill contains the processing rules. The default cadence is hourly because reset posts are usually advance notices rather than instant events.
 
 Use the project-level `.codex/config.toml` profile `codex-reset-watchdog-net`: write access to the current workspace plus outbound HTTPS to `apitest.dayclaw.com`. The script reads `env` / `.env`, writes `var/state.json`, and calls the Dayclaw public source; it does not require full filesystem access.
 
@@ -198,6 +231,7 @@ Do not run `self_test`, `--prime-state`, or `--dry-run` during ordinary schedule
 - `review_count`: number of new unseen items emitted for LLM review.
 - `has_review_items`: boolean; true when `review_items` is non-empty.
 - `review_items`: structured new items with text, URL, author, event key, created time, and reply metadata when available.
+- `fetched_items`: read-only summary of the current fetched batch; use it for human reset/no-reset summaries, but create Triage findings only from qualifying new `review_items`.
 - `api_pages`: API diagnostics with response keys, source URL, limit, and extracted item count.
 - `api_warning`: present when the API succeeds but no item can be extracted.
 - `fetch_strategy`: fixed to `dayclaw_public_items`.

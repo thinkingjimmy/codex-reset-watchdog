@@ -29,4 +29,4 @@ If you promote an item, create one concise Codex Triage finding containing:
 
 If several items are clearly the same reset event, report only the strongest one. Mention that duplicates were ignored.
 
-If no item should be promoted, archive the Automation run with no finding.
+If no item should be promoted, create no Triage finding and return the concise no-reset run summary described in `SKILL.md`.

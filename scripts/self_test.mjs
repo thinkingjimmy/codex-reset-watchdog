@@ -20,7 +20,6 @@ import {
   reportTimezone,
   shouldReportOperationalFailure,
 } from "./check_once.mjs";
-import { testFixtureRun } from "./test_fixture.mjs";
 
 async function main() {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "codex-reset-watchdog-"));
@@ -123,9 +122,6 @@ async function main() {
     assert.equal(parseArgs(["--diagnose-network"]).diagnoseNetwork, true);
     assert.equal(parseArgs(["--handle", "target"]).sourceUrl, "https://api.dayclaw.com/api/source/public/x/target/items");
     assert.equal(parseArgs(["--source-url", "https://example.test/items"]).sourceUrl, "https://example.test/items");
-    assert.equal(parseArgs(["--test-fixture", "future-reset"]).dryRun, true);
-    assert.equal(parseArgs(["--prime-state", "--test-fixture", "future-reset"]).primeState, false);
-    assert.equal(testFixtureRun("future-reset", { now: new Date("2026-06-01T00:00:00Z") }).rawItems[0].external_id, "watchdog-test-20260601000000");
 
     console.log("self_test passed");
   } finally {

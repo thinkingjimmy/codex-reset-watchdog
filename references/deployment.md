@@ -18,7 +18,6 @@ The target account is already set:
 TARGET_X_HANDLE=thsottiaux
 DAYCLAW_SOURCE_ITEMS_URL=
 REPORT_TIMEZONE=
-WATCHDOG_TEST_FIXTURE=
 ```
 
 The full profile URL is `https://x.com/thsottiaux`. The default public source is `https://api.dayclaw.com/api/source/public/x/thsottiaux/items`.
@@ -70,7 +69,7 @@ Run once before enabling the schedule:
 node scripts/check_once.mjs --prime-state --json
 ```
 
-This prevents old public source items from becoming new Codex alert Threads/findings.
+This prevents old public source items from becoming new Codex Triage findings.
 
 Dry-run checks are useful for API reading and JSON parsing, but they do not prove state writes. The scheduled Automation writes `seen_tweets` and `operational_failures`, so keep the default `STATE_FILE_PATH=var/state.json` in sandboxed Codex runs.
 
@@ -107,13 +106,13 @@ If Automation creation succeeds after one or more parameter retries, do not surf
 
 ## Run summary behavior
 
-Codex Automation run output lives in Automations/Previous Runs; do not assume routine results appear as chat notifications. Official Codex docs describe automations as adding findings to the inbox or archiving the task when there is nothing to report. For this watchdog, the more visible positive path is a new Codex Thread when `create_thread` is available, with Triage/Inbox finding as fallback. Create either surface only for a new future reset signal or `notification_test=true`.
+Codex Automation run output lives in Automations/Previous Runs; do not assume routine results appear as chat notifications. User-facing delivery should come from Codex Automation notification settings outside this skill. This skill should create a finding only for a new future reset signal.
 
 A healthy no-op run after priming should say:
 
 ```text
 ✅ No actionable future Codex reset signal.
-Fetched: 10; new items: 0; review items: 0; Thread/finding: none.
+Fetched: 10; new items: 0; review items: 0; Triage finding: none.
 Historical reset posts in the current batch are already completed or expired, so no user action is needed.
 ```
 
@@ -123,23 +122,7 @@ A positive run should start with a high-signal banner:
 🚨 Actionable Codex reset ahead: limits will reset tomorrow morning. Reset timing: 2026-06-01 morning (from "tomorrow morning"; report timezone: user's local timezone).
 ```
 
-Routine no-op runs should not repeat the full fetched-items table, create Threads, create Triage/Inbox findings, send external notifications, or write routine automation memory. The concise report is safe for Automation run logs and Test/Run Now results. Test/Run Now is only an immediate run of the same Automation prompt; it is not a special mode and cannot pass per-run parameters.
-
-## Notification smoke test
-
-Do not wait for a real reset to test the alert path. Temporarily set this in the private `env` or `.env` file:
-
-```env
-WATCHDOG_TEST_FIXTURE=future-reset
-```
-
-Then click the Automation **Test/Run Now** button. This button cannot pass `--test-fixture` or any other one-off argument, so the env file must contain the smoke-test switch before the run starts. For a local CLI-only check, run:
-
-```bash
-node scripts/check_once.mjs --test-fixture future-reset --json
-```
-
-The script emits a synthetic future reset item, sets `notification_test=true`, forces dry-run behavior, and avoids writing fake IDs into the real state file. The Automation should create a clearly marked TEST Codex Thread when `create_thread` is available, or a clearly marked TEST Triage/Inbox finding as fallback. Remove or blank `WATCHDOG_TEST_FIXTURE` immediately after the smoke test.
+Routine no-op runs should not repeat the full fetched-items table, create Triage findings, send external notifications, or write routine automation memory. The concise report is safe for Automation run logs and Test/Run Now results. Test/Run Now is only an immediate run of the same Automation prompt; it is not a special mode and cannot pass per-run parameters.
 
 ## Public source model
 
@@ -149,7 +132,6 @@ Default scheduled monitoring uses the Dayclaw public source:
 TARGET_X_HANDLE=thsottiaux
 DAYCLAW_SOURCE_ITEMS_URL=
 REPORT_TIMEZONE=
-WATCHDOG_TEST_FIXTURE=
 ```
 
 When the override is blank, the script derives:
@@ -210,21 +192,21 @@ State contains `seen_tweets` for dedupe and `operational_failures` for repeated 
 
 ## Lifecycle
 
-The Automation should keep running after a Thread/finding.
+The Automation should keep running after a finding.
 
 Expected behavior:
 
 1. New public source item appears.
 2. Script outputs it in `review_items`.
 3. Codex Automation LLM judges whether it signals an actionable future Codex reset/refill/restored allowance/remediation.
-4. Automation creates a Codex Thread when available, or posts a Triage/Inbox finding as fallback, only for positive future-actionable judgments.
+4. Automation posts a Triage finding only for positive future-actionable judgments.
 5. Script records the item ID in the JSON state file.
 6. Later runs ignore the same item.
 7. A future item with a new ID can still produce a new finding.
 
 ## Failure handling
 
-Create a Codex operational Thread/finding when:
+Report a Codex Triage finding when:
 
 - `check_once.mjs` exits non-zero;
 - Dayclaw returns an API error;
@@ -258,9 +240,9 @@ OPERATIONAL_ERROR_REPORT_THRESHOLD=3
 OPERATIONAL_ERROR_REPORT_EVERY_FAILURES=24
 ```
 
-Do not report scheduled Threads/findings when there are simply no new items, no positive LLM judgments, or a non-reportable transient network status. Transient network errors report on the threshold failure, then only every `OPERATIONAL_ERROR_REPORT_EVERY_FAILURES` failures while the outage continues.
+Do not report scheduled findings when there are simply no new items, no positive LLM judgments, or a non-reportable transient network status. Transient network errors report on the threshold failure, then only every `OPERATIONAL_ERROR_REPORT_EVERY_FAILURES` failures while the outage continues.
 
-Do not write automation memory for routine successful no-op runs. After state is primed, repeated output such as `status=ok`, `new_items=0`, and `review_count=0` is expected and should produce only the concise run report, with no Thread or Triage/Inbox finding.
+Do not write automation memory for routine successful no-op runs. After state is primed, repeated output such as `status=ok`, `new_items=0`, and `review_count=0` is expected and should produce only the concise run report, with no Triage finding.
 
 ## Useful links
 

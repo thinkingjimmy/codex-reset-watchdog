@@ -14,7 +14,6 @@ prefix_rule(
         "node scripts/check_once.mjs --prime-state --json",
         "node scripts/check_once.mjs --dry-run --json",
         "node scripts/check_once.mjs --diagnose-network --json",
-        "node scripts/check_once.mjs --test-fixture future-reset --json",
     ],
     not_match = [
         "node scripts/self_test.mjs",

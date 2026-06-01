@@ -5,7 +5,6 @@ import os from "node:os";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { testFixtureRun } from "./test_fixture.mjs";
 
 export const DAYCLAW_ITEMS_BASE_URL = "https://api.dayclaw.com/api/source/public/x";
 export const DEFAULT_TARGET_X_HANDLE = "thsottiaux";
@@ -566,7 +565,7 @@ function takeArg(argv, index) {
 }
 
 export function parseArgs(argv = process.argv.slice(2)) {
-  const args = { handle: String(process.env.TARGET_X_HANDLE || DEFAULT_TARGET_X_HANDLE).trim().replace(/^@/, ""), sourceUrl: String(process.env.DAYCLAW_SOURCE_ITEMS_URL || process.env.SOURCE_ITEMS_URL || "").trim(), includeReplies: envBool("INCLUDE_REPLIES", true), alertOnFirstRun: envBool("ALERT_ON_FIRST_RUN", false), testFixture: String(process.env.WATCHDOG_TEST_FIXTURE || "").trim(), primeState: false, dryRun: false, diagnoseNetwork: false, json: false };
+  const args = { handle: String(process.env.TARGET_X_HANDLE || DEFAULT_TARGET_X_HANDLE).trim().replace(/^@/, ""), sourceUrl: String(process.env.DAYCLAW_SOURCE_ITEMS_URL || process.env.SOURCE_ITEMS_URL || "").trim(), includeReplies: envBool("INCLUDE_REPLIES", true), alertOnFirstRun: envBool("ALERT_ON_FIRST_RUN", false), primeState: false, dryRun: false, diagnoseNetwork: false, json: false };
 
   for (let index = 0; index < argv.length; index += 1) {
     const current = argv[index];
@@ -575,9 +574,6 @@ export function parseArgs(argv = process.argv.slice(2)) {
     else if (current === "--diagnose-network") args.diagnoseNetwork = true;
     else if (current === "--json") args.json = true;
     else if (current === "--alert-on-first-run") args.alertOnFirstRun = true;
-    else if (current.startsWith("--test-fixture")) {
-      const [, value, nextIndex] = takeArg(argv, index); args.testFixture = String(value || "").trim(); index = nextIndex;
-    }
     else if (current.startsWith("--handle")) {
       const [, value, nextIndex] = takeArg(argv, index); args.handle = String(value || "").replace(/^@/, ""); args.sourceUrl = ""; index = nextIndex;
     } else if (current.startsWith("--source-url") || current.startsWith("--api-url")) {
@@ -594,7 +590,6 @@ export function parseArgs(argv = process.argv.slice(2)) {
   }
 
   args.sourceUrl = buildDayclawItemsUrl({ handle: args.handle, sourceUrl: args.sourceUrl });
-  if (args.testFixture) { args.sourceUrl = `test-fixture:${args.testFixture}`; args.dryRun = true; args.primeState = false; }
   return args;
 }
 
@@ -623,7 +618,7 @@ function transientNetworkSummary(error, store, args) {
     review_count: 0,
     has_review_items: false,
     review_items: [],
-    notification_surface: "codex_thread_or_automation_triage",
+    notification_surface: "codex_automation_triage",
     dry_run: Boolean(args.dryRun),
     state: store.info(),
     operational_error: {
@@ -656,7 +651,7 @@ function runtimeErrorSummary(error, args, store = null) {
     review_count: 0,
     has_review_items: false,
     review_items: [],
-    notification_surface: "codex_thread_or_automation_triage",
+    notification_surface: "codex_automation_triage",
     dry_run: Boolean(args.dryRun),
     state: store?.info?.() || null,
     operational_error: {
@@ -710,11 +705,11 @@ export async function main() {
   let apiPages = [];
 
   try {
-    const fetched = testFixtureRun(args.testFixture) || (await fetchSourceItems({ sourceUrl: args.sourceUrl }));
+    const fetched = await fetchSourceItems({ sourceUrl: args.sourceUrl });
     payload = fetched.payload;
     rawItems = fetched.rawItems;
     apiPages = fetched.apiPages;
-    if (!args.testFixture) store.clearOperationalFailure(NETWORK_FAILURE_KEY);
+    store.clearOperationalFailure(NETWORK_FAILURE_KEY);
   } catch (error) {
     const summary =
       error instanceof DayclawTransientError
@@ -758,11 +753,9 @@ export async function main() {
       status: "ok",
       target: targetLabel(args),
       source_url: args.sourceUrl,
-      fetch_strategy: args.testFixture ? "test_fixture" : "dayclaw_public_items",
+      fetch_strategy: "dayclaw_public_items",
       fetched: candidates.length,
       new_items: reviewItems.length,
-      notification_test: Boolean(args.testFixture),
-      test_fixture: args.testFixture || null,
       api_pages: apiPages,
       api_warning: candidates.length === 0 ? emptyFetchWarning(apiPages) : null,
       report_timezone: reportTimezone(),
@@ -775,8 +768,8 @@ export async function main() {
       review_items: reviewItems,
       fetched_items: candidates.map(buildFetchedItem),
       llm_instruction:
-        "Use run_time plus created_at_local/local_timezone. Use 🚨 only for actionable future reset/refill/restored allowance signals. Treat completed or past reset posts as historical/no-action. If notification_test=true or an actionable/unclear future reset exists, create a clearly marked Codex Thread when create_thread is available; otherwise create a Triage/Inbox finding. If no new_items and no actionable future/unclear signal remains, return a compact no-action summary without the full repeated table. Do not output process narration, raw JSON, or routine memory notes.",
-      notification_surface: "codex_thread_or_automation_triage",
+        "Use run_time plus created_at_local/local_timezone. Use 🚨 only for actionable future reset/refill/restored allowance signals. Treat completed or past reset posts as historical/no-action. If no new_items and no actionable future/unclear signal remains, return a compact no-action summary without the full repeated table. Report a Codex Triage finding only for qualifying new review_items. Do not output process narration, raw JSON, or routine memory notes.",
+      notification_surface: "codex_automation_triage",
       dry_run: Boolean(args.dryRun),
       results,
     };

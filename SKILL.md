@@ -109,7 +109,7 @@ Run reports should be short and reviewable:
 - compare candidate reset timing against `run_time.created_at_local` plus `local_timezone`; the alert exists to help the user spend tokens before reset, so completed or past resets are historical and not actionable;
 - explain the actionable/no-action conclusion using fetched item wording; do not call a completed reset `🚨` just because the text contains “reset”;
 - include a Markdown table for `fetched_items` with columns `Time`, `Reset?`, `Reset timing`, `Item`, and `Link`;
-- include the table only when there is a new review item, an actionable future reset, an unclear future signal, or an explicit diagnostic/test request; routine `new_items=0` runs with only historical/completed signals should return a compact no-action summary instead of repeating the full table;
+- include the table only when there is a new review item, an actionable future reset, an unclear future signal, `notification_test=true`, or an explicit diagnostic request; routine `new_items=0` runs with only historical/completed signals should return a compact no-action summary instead of repeating the full table;
 - put rows with `Reset?` = `🚨 future` or `⚠️ unclear` before `✅ no` and `history` rows so the signal is not buried;
 - set `Reset?` to `🚨 future`, `history`, `✅ no`, or `⚠️ unclear`; one unclear future row is enough reason to mention that a human should review it;
 - fill `Reset timing` for every `yes` or `unclear` row. Use the item's wording (`tomorrow morning`, `later today`, `after the deploy`) and derive an absolute date from `created_at_local` plus `local_timezone`; do not say timezone unknown when `local_timezone` is present. Use `-` for clear no rows;
@@ -118,7 +118,7 @@ Run reports should be short and reviewable:
 - mention source health only when useful;
 - avoid process narration such as checking memory, waiting for commands, choosing paths, writing memory, or restating every command.
 
-The Automation prompt cannot reliably know whether a run came from the Test button or the schedule. Use the same reset-focused report for both.
+The Automation Test/Run Now button is just an immediate run of the same Automation prompt. It cannot be used as a special mode and cannot pass one-off arguments. The Automation prompt cannot reliably know whether a run came from the button or the schedule, so use the same reset-focused report for both and rely on `notification_test=true` only when the script JSON says so.
 
 ## Reset judgment policy
 
@@ -150,9 +150,9 @@ Summarize setup in human language:
 - source URL and whether Dayclaw is reachable;
 - state file path and fallback status;
 - Automation cadence and command;
-- what the Codex Automations **Test** button should show.
+- what the Codex Automations **Test/Run Now** button should show. Explain that it is an immediate normal run, not a parameterized test mode.
 
-To test the notification path without waiting for a real reset, temporarily set `WATCHDOG_TEST_FIXTURE=future-reset` in the private `env` or `.env`, click the Automation **Test** button, verify that the report/finding is clearly marked TEST and shows a future reset, then remove or blank the variable.
+To test the notification path without waiting for a real reset, temporarily set `WATCHDOG_TEST_FIXTURE=future-reset` in the private `env` or `.env`, then click the Automation **Test/Run Now** button. The button cannot pass `--test-fixture`; the env variable is the test switch. Verify that the report/finding is clearly marked TEST and shows a future reset, then remove or blank the variable.
 
 Do not paste the full JSON output unless debugging.
 
@@ -225,7 +225,7 @@ Use this only to test that the Automation can surface a reset notification befor
 WATCHDOG_TEST_FIXTURE=future-reset
 ```
 
-Then click the Automation **Test** button, or run:
+Then click the Automation **Test/Run Now** button. This is still the normal Automation run path; it cannot pass temporary parameters, so `WATCHDOG_TEST_FIXTURE` must be set before the click. For a local CLI-only check, run:
 
 ```bash
 node scripts/check_once.mjs --test-fixture future-reset --json

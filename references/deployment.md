@@ -123,7 +123,7 @@ A positive run should start with a high-signal banner:
 🚨 Actionable Codex reset ahead: limits will reset tomorrow morning. Reset timing: 2026-06-01 morning (from "tomorrow morning"; report timezone: user's local timezone).
 ```
 
-Routine no-op runs should not repeat the full fetched-items table, create Triage findings, external notifications, or routine automation memory. The concise report is safe for Automation run logs and Test results.
+Routine no-op runs should not repeat the full fetched-items table, create Triage findings, external notifications, or routine automation memory. The concise report is safe for Automation run logs and Test/Run Now results. Test/Run Now is only an immediate run of the same Automation prompt; it is not a special mode and cannot pass per-run parameters.
 
 ## Notification smoke test
 
@@ -133,7 +133,7 @@ Do not wait for a real reset to test the alert path. Temporarily set this in the
 WATCHDOG_TEST_FIXTURE=future-reset
 ```
 
-Then click the Automation **Test/Run Now** button, or run:
+Then click the Automation **Test/Run Now** button. This button cannot pass `--test-fixture` or any other one-off argument, so the env file must contain the smoke-test switch before the run starts. For a local CLI-only check, run:
 
 ```bash
 node scripts/check_once.mjs --test-fixture future-reset --json

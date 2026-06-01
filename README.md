@@ -32,7 +32,7 @@ After installation:
    - if the schema has no `command` or `permissions` fields, do not invent them; the command lives in the thin prompt, and permissions come from `.codex/config.toml`;
    - if the current tool actually requires `model` and `reasoningEffort`/`reasoning`, include them even if the schema marks them optional;
    - after creation, read the Automation back and confirm cadence, working directory, active status, command, and prompt were not rewritten by the tool layer.
-7. Give me a concise setup summary: success/failure, Automation cadence, working directory, state path, and what I should see when I click the Codex Test button.
+7. Give me a concise setup summary: success/failure, Automation cadence, working directory, state path, and what I should see when I click Codex Test/Run Now. Note that Test/Run Now immediately runs the same Automation prompt; it is not a special test mode and cannot pass one-off parameters for that run.
 
 Do not paste raw JSON unless I explicitly ask. In the final summary, do not narrate schema retries that were already successfully resolved; mention them only if creation ultimately fails or I ask for debugging. Do not enable full access unless the narrow network permission path is unavailable and you explain the tradeoff first.
 ```
@@ -53,7 +53,7 @@ You do not need to wait for the next real reset. Temporarily add this to your pr
 WATCHDOG_TEST_FIXTURE=future-reset
 ```
 
-Then click the Automation **Run Now/Test** button. The script emits a synthetic “reset tomorrow morning” item with `notification_test=true` and does not write to the real state file. The expected result is a report or Triage finding clearly labeled TEST with a future reset time. Remove or blank `WATCHDOG_TEST_FIXTURE` immediately after the smoke test.
+Then click the Automation **Run Now/Test** button. This button only runs the current Automation immediately and cannot pass temporary parameters such as `--test-fixture`, so the smoke-test switch must already be present in `env` / `.env`. The script emits a synthetic “reset tomorrow morning” item with `notification_test=true` and does not write to the real state file. The expected result is a report or Triage finding clearly labeled TEST with a future reset time. Remove or blank `WATCHDOG_TEST_FIXTURE` immediately after the smoke test.
 
 ## Want To Monitor More Sources?
 

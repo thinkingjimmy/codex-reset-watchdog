@@ -33,7 +33,7 @@ https://github.com/thinkingjimmy/codex-reset-watchdog
    - 如果 schema 没有 `command` 或 `permissions` 字段，不要硬造字段；命令写在 thin prompt 里，权限来自 `.codex/config.toml`；
    - 如果当前工具实际要求 `model` 和 `reasoningEffort`/`reasoning`，即使 schema 标成 optional 也要补上；
    - 创建后读回 Automation，确认频率、working directory、active 状态、command 和 prompt 没有被工具层改写。
-7. 最后给我一个简洁 setup 总结：成功/失败、Automation 频率、working directory、state 路径，以及我点击 Codex Test 按钮时应该看到什么。
+7. 最后给我一个简洁 setup 总结：成功/失败、Automation 频率、working directory、state 路径，以及我点击 Codex Test/Run Now 时应该看到什么。注意 Test/Run Now 只是马上运行同一份 Automation prompt，不是特殊测试模式，也不能为这一次运行单独传参数。
 
 不要贴原始 JSON，除非我明确要求。最终总结里不要叙述已经成功绕过的 schema 重试；只有创建最终失败或我要求 debug 时才提。不要开启 full access，除非窄网络权限路径不可用，并且你先解释取舍。
 ```
@@ -52,7 +52,7 @@ https://github.com/thinkingjimmy/codex-reset-watchdog
 WATCHDOG_TEST_FIXTURE=future-reset
 ```
 
-然后点击 Automation 的 Run Now/Test。脚本会生成一条“明天早上 reset”的合成测试项，`notification_test=true`，不会写入真实 state。预期结果是报告或 Triage finding 明确标成 TEST，并显示一个未来 reset 时间。测试完成后立刻把 `WATCHDOG_TEST_FIXTURE` 删掉或留空。
+然后点击 Automation 的 Run Now/Test。这个按钮只是马上运行一次当前 Automation，不能临时传 `--test-fixture` 之类的参数；因此烟测开关必须提前写在 `env` / `.env` 里。脚本会生成一条“明天早上 reset”的合成测试项，`notification_test=true`，不会写入真实 state。预期结果是报告或 Triage finding 明确标成 TEST，并显示一个未来 reset 时间。测试完成后立刻把 `WATCHDOG_TEST_FIXTURE` 删掉或留空。
 
 ## 想要监控更多信息？
 

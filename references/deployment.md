@@ -4,15 +4,15 @@ This repo is designed to be GitHub-safe and easy for a user to run.
 
 ## User-facing setup
 
-The intended user flow is one copied prompt from `README.md` / `README.zh-CN.md`. Codex should install this skill from:
+The intended user flow starts with a dedicated Codex Project that acts as the watchdog runtime workspace. From a chat inside that Project, the user copies one prompt from `README.md` / `README.zh-CN.md`. Codex should install this skill from:
 
 ```text
 https://github.com/thinkingjimmy/codex-reset-watchdog
 ```
 
-Then Codex should run setup checks, prime state, and summarize the installed directory in human language. The user manually creates the hourly cron/project Automation in the Codex UI by copying the README Automation prompt. Users only need a local `env` or `.env` file when they want to override defaults.
+Then Codex should run setup checks, prime state, create or update an hourly cron/project Automation, and summarize the result in human language. Users only need a local `env` or `.env` file when they want to override defaults.
 
-The README install prompt is intentionally quiet. Apply the setup notes in this document silently, and send intermediate user messages only for approval requests or real blockers. Do not turn command retries, raw JSON, or state-file inspection into the setup story.
+The README setup prompt is intentionally quiet. Apply the setup notes in this document silently, and send intermediate user messages only for approval requests or real blockers. Do not turn schema probing, command retries, raw JSON, or state-file inspection into the setup story.
 
 The target account is already set:
 
@@ -81,32 +81,32 @@ Use the project-level `.codex/config.toml` profile `codex-reset-watchdog-net`. T
 
 If the Codex UI only lets local shell commands reach the network after enabling full access, treat that as a runtime permission limitation. The project itself still only needs workspace write plus network egress, so full access should be a temporary fallback rather than the recommended setup.
 
-After install initialization succeeds, the user should manually create a cron/project Automation that runs hourly:
+After install initialization succeeds, Codex should create or update a cron/project Automation that runs hourly:
 
 ```bash
 node scripts/check_once.mjs --json
 ```
 
-Use the full contents of `references/automation-prompt.md` as the Automation prompt. The same prompt is embedded in the README for copying. It is intentionally thin and delegates behavior to `SKILL.md`; do not copy the full run protocol into the Automation prompt.
+Use the full contents of `references/automation-prompt.md` as the Automation prompt. It is intentionally thin and delegates behavior to `SKILL.md`; do not copy the full run protocol into the Automation prompt.
 
 Setup-only commands are `node scripts/self_test.mjs`, `node scripts/check_once.mjs --prime-state --json`, and `node scripts/check_once.mjs --dry-run --json`. Do not run them on every schedule.
 
-## Manual Automation creation notes
+## Automation creation notes
 
-Do not ask the install prompt to create or update Automations. Codex Automation UI and schemas move faster than docs, so the user should create the scheduled job manually in the UI. Use the cron/project path for this watchdog, not a thread/heartbeat path.
+Only create or update Automations from inside a Codex Project chat. A normal chat does not provide the stable cwd, project-level `.codex/config.toml`, or persistent state path this watchdog needs. Use the cron/project path for this watchdog, not a thread/heartbeat path.
 
-Minimum fields to communicate:
+Minimum fields:
 
 - Name: `Codex Reset Watchdog`.
 - Cadence: hourly.
 - Type: cron/project scheduled job, not thread/heartbeat.
 - Working directory/cwds: the installed skill directory that contains `SKILL.md`, `scripts/check_once.mjs`, and `.codex/config.toml`.
-- Prompt: the exact README Automation prompt, which must match `references/automation-prompt.md`.
+- Prompt: the full contents of `references/automation-prompt.md`.
 - Permissions: rely on `.codex/config.toml` and the narrow `codex-reset-watchdog-net` profile.
 
-If the product UI asks for details such as `kind=cron`, local/worktree execution, model, reasoning effort, or a schedule format, the user should follow the current UI labels. Do not encode those volatile UI details into the install prompt.
+If the Automation tool schema asks for details such as `kind=cron`, local/worktree execution, model, reasoning effort, or a schedule format, use the current schema labels. Do not encode brittle UI details into the README prose.
 
-README and `references/automation-prompt.md` must stay in sync. When the Automation prompt changes, update both copies in the same commit.
+If Automation creation succeeds after one or more parameter retries, do not surface the retry story in the final setup summary. Report it only when creation fails or the user asks for debug details.
 
 ## Run summary behavior
 

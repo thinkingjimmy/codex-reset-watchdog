@@ -99,14 +99,14 @@ Source is healthy.
 When a reset signal is present, the first line should be stronger and include timing:
 
 ```text
-🚨 Codex reset signal found: limits will reset tomorrow morning. Reset timing: 2026-06-01 morning (from "tomorrow morning"; timezone unknown).
+🚨 Codex reset signal found: limits will reset tomorrow morning. Reset timing: 2026-06-01 morning (from "tomorrow morning"; report timezone: user's local timezone).
 ```
 
 The result should not paste the raw `check_once.mjs --json` object. Healthy no-op runs should not create Triage findings, external notifications, or routine automation memory; the concise report is safe to show in Automation run logs and Test results.
 
 ## State And Dedupe
 
-`STATE_FILE_PATH` points to a persistent JSON file:
+`STATE_FILE_PATH` points to a persistent JSON file. Reports use the Automation runtime/user timezone by default; set `REPORT_TIMEZONE` to an IANA timezone only when you want an explicit override.
 
 - `seen_tweets` prevents the same source item from being sent to the LLM every run.
 - `operational_failures` tracks consecutive transient Dayclaw network failures.
@@ -129,7 +129,7 @@ STATE_FILE_PATH=var/state.json
 - `review_count`: number of new unseen items emitted for LLM review.
 - `has_review_items`: whether `review_items` is non-empty.
 - `review_items`: all new unseen items with text, URL, author, reply metadata, event key, and available context fields.
-- `fetched_items`: read-only summary of the current fetched batch, used for the human review table even when all items were already seen.
+- `fetched_items`: read-only summary of the current fetched batch, including `created_at_utc`, `created_at_local`, and `local_timezone` for the human review table even when all items were already seen.
 - `api_pages`: API diagnostics, including response keys, source URL, limit, and extracted item count.
 - `api_warning`: present when the API succeeds but no item can be extracted.
 - `state`: actual state file path, requested path, fallback status, and related warnings.

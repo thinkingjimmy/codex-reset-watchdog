@@ -15,7 +15,9 @@ import {
   itemsFromPayload,
   normalizeSourceItem,
   parseArgs,
+  parseSourceTimestamp,
   processCandidates,
+  reportTimezone,
   shouldReportOperationalFailure,
 } from "./check_once.mjs";
 
@@ -66,6 +68,10 @@ async function main() {
     const normalized = normalizeSourceItem(high);
     assert.equal(normalized.author_username, "target");
     assert.equal(eventKeyForTweet(normalized), "100");
+    process.env.REPORT_TIMEZONE = "Asia/Shanghai";
+    assert.equal(reportTimezone(), "Asia/Shanghai");
+    assert.equal(parseSourceTimestamp(high.published_at).toISOString(), "2026-05-30T10:00:00.000Z");
+    assert.equal(buildFetchedItem(normalized).created_at_local, "2026-05-30T18:00:00");
     assert.equal(buildFetchedItem(normalized).text, high.content);
     assert.equal(buildReviewItem(normalizeSourceItem(reply)).context_status, "not_available_in_public_feed");
 

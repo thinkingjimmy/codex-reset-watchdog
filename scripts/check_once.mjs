@@ -93,6 +93,19 @@ export function prettyJson(value) {
   return JSON.stringify(value, null, 2);
 }
 
+export function reportTimezone(value = process.env.REPORT_TIMEZONE) {
+  const system = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC", timezone = String(value || system).trim() || system;
+  try { new Intl.DateTimeFormat("en-US", { timeZone: timezone }).format(new Date(0)); return timezone; } catch { return system; }
+}
+export function parseSourceTimestamp(value) {
+  const text = String(value || "").trim(), date = text && new Date(/(?:[zZ]|[+-]\d{2}:?\d{2})$/.test(text) ? text : `${text}Z`);
+  return date && !Number.isNaN(date.getTime()) ? date : null;
+}
+function timestampFields(value) {
+  const timezone = reportTimezone(), date = parseSourceTimestamp(value), local = date && new Intl.DateTimeFormat("sv-SE", { timeZone: timezone, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }).format(date).replace(" ", "T");
+  return { created_at: value, created_at_utc: date?.toISOString() || null, created_at_local: local || null, local_timezone: timezone, source_timezone_assumption: "UTC when no offset is present" };
+}
+
 export class DedupeStore {
   constructor(filePath = process.env.STATE_FILE_PATH || DEFAULT_STATE_FILE_PATH) {
     this.requestedPath = filePath;
@@ -498,7 +511,7 @@ export function buildReviewItem(tweet) {
     tweet_id: tweet.id,
     event_key: eventKeyForTweet(tweet),
     url: buildTweetUrl(tweet),
-    created_at: tweet.created_at,
+    ...timestampFields(tweet.created_at),
     author: tweet.author_username,
     author_name: tweet.author_name,
     is_reply: isReplyLike(raw),
@@ -513,7 +526,7 @@ export function buildReviewItem(tweet) {
 
 export function buildFetchedItem(tweet) {
   const raw = tweet.raw || {};
-  return { tweet_id: tweet.id, url: buildTweetUrl(tweet), created_at: tweet.created_at, author: tweet.author_username, is_reply: isReplyLike(raw), text: tweet.text };
+  return { tweet_id: tweet.id, url: buildTweetUrl(tweet), ...timestampFields(tweet.created_at), author: tweet.author_username, is_reply: isReplyLike(raw), text: tweet.text };
 }
 
 export async function processCandidates(candidates, { store, args }) {
@@ -562,16 +575,7 @@ function takeArg(argv, index) {
 }
 
 export function parseArgs(argv = process.argv.slice(2)) {
-  const args = {
-    handle: String(process.env.TARGET_X_HANDLE || DEFAULT_TARGET_X_HANDLE).trim().replace(/^@/, ""),
-    sourceUrl: String(process.env.DAYCLAW_SOURCE_ITEMS_URL || process.env.SOURCE_ITEMS_URL || "").trim(),
-    includeReplies: envBool("INCLUDE_REPLIES", true),
-    alertOnFirstRun: envBool("ALERT_ON_FIRST_RUN", false),
-    primeState: false,
-    dryRun: false,
-    diagnoseNetwork: false,
-    json: false,
-  };
+  const args = { handle: String(process.env.TARGET_X_HANDLE || DEFAULT_TARGET_X_HANDLE).trim().replace(/^@/, ""), sourceUrl: String(process.env.DAYCLAW_SOURCE_ITEMS_URL || process.env.SOURCE_ITEMS_URL || "").trim(), includeReplies: envBool("INCLUDE_REPLIES", true), alertOnFirstRun: envBool("ALERT_ON_FIRST_RUN", false), primeState: false, dryRun: false, diagnoseNetwork: false, json: false };
 
   for (let index = 0; index < argv.length; index += 1) {
     const current = argv[index];
@@ -581,24 +585,15 @@ export function parseArgs(argv = process.argv.slice(2)) {
     else if (current === "--json") args.json = true;
     else if (current === "--alert-on-first-run") args.alertOnFirstRun = true;
     else if (current.startsWith("--handle")) {
-      const [, value, nextIndex] = takeArg(argv, index);
-      args.handle = String(value || "").replace(/^@/, ""); args.sourceUrl = "";
-      index = nextIndex;
+      const [, value, nextIndex] = takeArg(argv, index); args.handle = String(value || "").replace(/^@/, ""); args.sourceUrl = ""; index = nextIndex;
     } else if (current.startsWith("--source-url") || current.startsWith("--api-url")) {
-      const [, value, nextIndex] = takeArg(argv, index);
-      args.sourceUrl = String(value || "");
-      index = nextIndex;
+      const [, value, nextIndex] = takeArg(argv, index); args.sourceUrl = String(value || ""); index = nextIndex;
     } else if (current.startsWith("--include-replies")) {
-      const [, value, nextIndex] = takeArg(argv, index);
-      args.includeReplies = parseBoolArg(value);
-      index = nextIndex;
+      const [, value, nextIndex] = takeArg(argv, index); args.includeReplies = parseBoolArg(value); index = nextIndex;
     } else if (current.startsWith("--hydrate-reply-context") || current.startsWith("--enrich-reply-context")) {
-      const [, value, nextIndex] = takeArg(argv, index);
-      args.hydrateReplyContext = parseBoolArg(value);
-      index = nextIndex;
+      const [, value, nextIndex] = takeArg(argv, index); args.hydrateReplyContext = parseBoolArg(value); index = nextIndex;
     } else if (current.startsWith("--fetch-strategy") || current.startsWith("--max-pages")) {
-      const [, , nextIndex] = takeArg(argv, index);
-      index = nextIndex;
+      const [, , nextIndex] = takeArg(argv, index); index = nextIndex;
     } else {
       throw new Error(`Unknown argument: ${current}`);
     }
@@ -752,6 +747,7 @@ export async function main() {
         marked_seen: candidates.length,
         api_pages: apiPages,
         api_warning: candidates.length === 0 ? emptyFetchWarning(apiPages) : null,
+        report_timezone: reportTimezone(),
         state: store.info(),
         review_count: 0,
         has_review_items: false,
@@ -772,6 +768,7 @@ export async function main() {
       new_items: reviewItems.length,
       api_pages: apiPages,
       api_warning: candidates.length === 0 ? emptyFetchWarning(apiPages) : null,
+      report_timezone: reportTimezone(),
       source: payload?.source || null,
       state: store.info(),
       reply_context_fetches: contextFetches,
@@ -780,7 +777,7 @@ export async function main() {
       review_items: reviewItems,
       fetched_items: candidates.map(buildFetchedItem),
       llm_instruction:
-        "First answer with an emoji-led banner: 🚨 reset found, ⚠️ unclear, or ✅ no reset. Treat future scheduled resets such as will reset, tomorrow morning, later today, or after deploy as positive signals. Include reset timing for every yes/unclear row and a Markdown table reviewing fetched_items. Report a Codex Triage finding only for qualifying new review_items. Do not output process narration, raw JSON, or routine memory notes.",
+        "First answer with an emoji-led banner: 🚨 reset found, ⚠️ unclear, or ✅ no reset. Treat future scheduled resets such as will reset, tomorrow morning, later today, or after deploy as positive signals. Use created_at_local/local_timezone for displayed times and reset timing. Include reset timing for every yes/unclear row and a Markdown table reviewing fetched_items. Report a Codex Triage finding only for qualifying new review_items. Do not output process narration, raw JSON, or routine memory notes.",
       notification_surface: "codex_automation_triage",
       dry_run: Boolean(args.dryRun),
       results,

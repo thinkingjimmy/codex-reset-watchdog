@@ -25,7 +25,7 @@ The item probably means one of these:
 If you promote an item, create one concise Codex Triage finding containing:
 
 - why it likely signals a Codex reset/refill/restored allowance/remediation;
-- reset timing, including the item wording and an absolute date derived from `created_at` when possible;
+- reset timing, including the item wording and an absolute date derived from `created_at_local` plus `local_timezone` when possible;
 - item text and available context when relevant;
 - author, created time, URL, and event key.
 

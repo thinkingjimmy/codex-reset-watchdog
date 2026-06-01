@@ -28,9 +28,11 @@ TARGET_X_HANDLE=thsottiaux
 DAYCLAW_SOURCE_ITEMS_URL=
 STATE_FILE_PATH=var/state.json
 INCLUDE_REPLIES=true
+REPORT_TIMEZONE=
 ```
 
 When `DAYCLAW_SOURCE_ITEMS_URL` is blank, `scripts/check_once.mjs` derives `https://api.dayclaw.com/api/source/public/x/<TARGET_X_HANDLE>/items`.
+When `REPORT_TIMEZONE` is blank, reports use the Automation runtime/user timezone from `Intl.DateTimeFormat().resolvedOptions().timeZone`; set an IANA timezone only when the user wants an explicit override.
 
 ## Core behavior
 
@@ -105,7 +107,7 @@ Run reports should be short and reviewable:
 - include all fetched rows when there are 10 or fewer; if there are more, show the newest 10 and say how many were omitted;
 - put rows with `Reset?` = `🚨 yes` or `⚠️ unclear` before `✅ no` rows so the signal is not buried;
 - set `Reset?` to `🚨 yes`, `✅ no`, or `⚠️ unclear`; one unclear row is enough reason to mention that a human should review it;
-- fill `Reset timing` for every `yes` or `unclear` row. Use the item's wording (`tomorrow morning`, `later today`, `after the deploy`) and derive an absolute date from `created_at` when possible; if timezone is unknown, say so briefly. Use `-` for clear no rows;
+- fill `Reset timing` for every `yes` or `unclear` row. Use the item's wording (`tomorrow morning`, `later today`, `after the deploy`) and derive an absolute date from `created_at_local` plus `local_timezone`; do not say timezone unknown when `local_timezone` is present. Use `-` for clear no rows;
 - keep each `Item` cell to one concise sentence and use the item URL as a short Markdown link;
 - include `new_items` / `review_count` and whether a Triage finding was created;
 - mention source health only when useful;
@@ -160,6 +162,7 @@ TARGET_X_HANDLE=thsottiaux
 DAYCLAW_SOURCE_ITEMS_URL=
 STATE_FILE_PATH=var/state.json
 INCLUDE_REPLIES=true
+REPORT_TIMEZONE=
 ```
 
 ### 2. Confirm Codex permissions
@@ -236,10 +239,11 @@ Do not run `self_test`, `--prime-state`, or `--dry-run` during ordinary schedule
 - `source_url`: Dayclaw public endpoint used for this run.
 - `review_count`: number of new unseen items emitted for LLM review.
 - `has_review_items`: boolean; true when `review_items` is non-empty.
-- `review_items`: structured new items with text, URL, author, event key, created time, and reply metadata when available.
-- `fetched_items`: read-only summary of the current fetched batch; use it for the human reset/no-reset table, but create Triage findings only from qualifying new `review_items`.
+- `review_items`: structured new items with text, URL, author, event key, UTC and local created time, and reply metadata when available.
+- `fetched_items`: read-only summary of the current fetched batch with `created_at_utc`, `created_at_local`, and `local_timezone`; use it for the human reset/no-reset table, but create Triage findings only from qualifying new `review_items`.
 - `api_pages`: API diagnostics with response keys, source URL, limit, and extracted item count.
 - `api_warning`: present when the API succeeds but no item can be extracted.
+- `report_timezone`: Automation runtime/user timezone used for local display; overridden only by `REPORT_TIMEZONE`.
 - `fetch_strategy`: fixed to `dayclaw_public_items`.
 - `state`: actual state file path, requested path, fallback status, and related warnings.
 - `llm_instruction`: short instruction for judging this batch.

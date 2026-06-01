@@ -101,14 +101,14 @@ Source 健康。
 如果发现 reset 信号，第一行应该更醒目，并直接给出时间：
 
 ```text
-🚨 发现 Codex reset 信号：limits will reset tomorrow morning。Reset 时间：2026-06-01 morning（来自 "tomorrow morning"，timezone unknown）。
+🚨 发现 Codex reset 信号：limits will reset tomorrow morning。Reset 时间：2026-06-01 morning（来自 "tomorrow morning"，报告时区：用户本地时区）。
 ```
 
 结果不应该直接贴 `check_once.mjs --json` 的完整对象。健康 no-op 运行不应创建 Triage finding、不应外发通知、不应写 routine memory；简短报告可以出现在 Automation run log 和 Test 结果里。
 
 ## 状态与去重
 
-`STATE_FILE_PATH` 指向持久 JSON 文件：
+`STATE_FILE_PATH` 指向持久 JSON 文件。报告默认使用 Automation 运行环境/用户时区；只有需要强制覆盖时才设置 `REPORT_TIMEZONE` 为 IANA timezone。
 
 - `seen_tweets`：同一 public source item 不会每次重复交给 LLM。
 - `operational_failures`：记录连续 Dayclaw 网络故障。
@@ -131,7 +131,7 @@ STATE_FILE_PATH=var/state.json
 - `review_count`：交给 LLM 审阅的新 item 数量。
 - `has_review_items`：`review_items` 是否非空。
 - `review_items`：所有新的未见 item，包含正文、URL、作者、回复元数据、event key 和可用上下文字段。
-- `fetched_items`：当前 fetched batch 的只读摘要；即使所有 item 都已见过，也用于生成面向人的审阅表格。
+- `fetched_items`：当前 fetched batch 的只读摘要，包含 `created_at_utc`、`created_at_local` 和 `local_timezone`；即使所有 item 都已见过，也用于生成面向人的审阅表格。
 - `api_pages`：API 返回摘要，包括返回键、source URL、limit 和提取到的 item 数量。
 - `api_warning`：API 成功但没有提取到任何 item 时出现。
 - `state`：实际使用的状态文件路径、用户请求的路径、是否发生 fallback，以及相关 warning。

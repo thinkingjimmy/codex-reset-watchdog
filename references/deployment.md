@@ -17,6 +17,7 @@ The target account is already set:
 ```env
 TARGET_X_HANDLE=thsottiaux
 DAYCLAW_SOURCE_ITEMS_URL=
+REPORT_TIMEZONE=
 ```
 
 The full profile URL is `https://x.com/thsottiaux`. The default public source is `https://api.dayclaw.com/api/source/public/x/thsottiaux/items`.
@@ -121,7 +122,7 @@ Source is healthy.
 A positive run should start with a high-signal banner:
 
 ```text
-🚨 Codex reset signal found: limits will reset tomorrow morning. Reset timing: 2026-06-01 morning (from "tomorrow morning"; timezone unknown).
+🚨 Codex reset signal found: limits will reset tomorrow morning. Reset timing: 2026-06-01 morning (from "tomorrow morning"; report timezone: user's local timezone).
 ```
 
 Healthy no-op runs should not create Triage findings, external notifications, or routine automation memory. The concise report is safe for Automation run logs and Test results.
@@ -133,6 +134,7 @@ Default scheduled monitoring uses the Dayclaw public source:
 ```env
 TARGET_X_HANDLE=thsottiaux
 DAYCLAW_SOURCE_ITEMS_URL=
+REPORT_TIMEZONE=
 ```
 
 When the override is blank, the script derives:
@@ -186,6 +188,8 @@ STATE_FILE_PATH=var/state.json
 ```
 
 `var/` is ignored by git and writable in Codex sandboxed runs. If the file is deleted, the script loses dedupe memory and may reprocess old items. If you set a custom home-directory path and Codex cannot write it, the script falls back to `var/state.json` and reports that in the `state` field.
+
+Leave `REPORT_TIMEZONE` blank to use the Automation runtime/user timezone. Set it only when the user explicitly wants a fixed IANA timezone such as `America/Los_Angeles`.
 
 State contains `seen_tweets` for dedupe and `operational_failures` for repeated transient network errors.
 

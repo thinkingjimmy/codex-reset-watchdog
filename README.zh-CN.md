@@ -2,7 +2,7 @@
 
 [English README](README.md)
 
-本 skill 的主要作用是通过监控 Codex 负责人 thsottiaux 在 X 上的公开动态，及时发现未来仍可行动的 Codex reset 信号，并通过 Codex Automation 输出 finding，帮助用户在 reset 前了解可能影响 Codex 使用的重大变更，从而更有意识地消耗剩余额度，必要时切换 fast 模式，减少浪费。
+本 skill 的主要作用是通过监控 Codex 负责人 thsottiaux 在 X 上的公开动态，及时发现未来仍可行动的 Codex reset 信号，并通过 Codex Automation 创建新的提醒 Thread（不可用时退回 finding），帮助用户在 reset 前了解可能影响 Codex 使用的重大变更，从而更有意识地消耗剩余额度，必要时切换 fast 模式，减少浪费。
 
 
 ## 如何使用？
@@ -40,7 +40,7 @@ https://github.com/thinkingjimmy/codex-reset-watchdog
 
 ### 测试 Automation
 
-如果一切顺利，你可以点击 Codex 左导航的 Automations 标签，看到一个名为「Codex Reset Watchdog」的 Automation。点击它进入详情页，然后右上角的 Run Now 按钮。你应该会在 Previous Runs 看到一次新的运行记录，点开它可以看到运行的细节。Automation 的运行输出可能只留在 Automations 里，不一定出现在普通 chats；真正面向用户的提醒路径是 Triage finding，而且只应该在发现新的、未来仍可行动的 reset 信号时创建。如果你能看到 thsottiaux 最近的动态被正确解析，并且报告明确说明是否需要行动，那就说明整个流程是通的。
+如果一切顺利，你可以点击 Codex 左导航的 Automations 标签，看到一个名为「Codex Reset Watchdog」的 Automation。点击它进入详情页，然后右上角的 Run Now 按钮。你应该会在 Previous Runs 看到一次新的运行记录，点开它可以看到运行的细节。Automation 的运行输出可能只留在 Automations 里，不一定出现在普通 chats；真正面向用户的提醒路径是：有未来可行动 reset 时创建一个新的 Codex Thread，如果当前运行环境不能创建 Thread，再退回 Triage/Inbox finding。没有新信号时不应该创建 Thread 或 finding。如果你能看到 thsottiaux 最近的动态被正确解析，并且报告明确说明是否需要行动，那就说明基础流程是通的。
 
 [previous runs screenshot](images/previous-runs.png)
 
@@ -52,7 +52,7 @@ https://github.com/thinkingjimmy/codex-reset-watchdog
 WATCHDOG_TEST_FIXTURE=future-reset
 ```
 
-然后点击 Automation 的 Run Now/Test。这个按钮只是马上运行一次当前 Automation，不能临时传 `--test-fixture` 之类的参数；因此烟测开关必须提前写在 `env` / `.env` 里。脚本会生成一条“明天早上 reset”的合成测试项，`notification_test=true`，不会写入真实 state。预期结果是报告或 Triage finding 明确标成 TEST，并显示一个未来 reset 时间。测试完成后立刻把 `WATCHDOG_TEST_FIXTURE` 删掉或留空。
+然后点击 Automation 的 Run Now/Test。这个按钮只是马上运行一次当前 Automation，不能临时传 `--test-fixture` 之类的参数；因此烟测开关必须提前写在 `env` / `.env` 里。脚本会生成一条“明天早上 reset”的合成测试项，`notification_test=true`，不会写入真实 state。预期结果是创建一个明确标成 TEST 的新 Codex Thread，并显示一个未来 reset 时间；如果当前 Codex 运行环境不能创建 Thread，则退回 TEST Triage/Inbox finding。测试完成后立刻把 `WATCHDOG_TEST_FIXTURE` 删掉或留空。
 
 ## 想要监控更多信息？
 

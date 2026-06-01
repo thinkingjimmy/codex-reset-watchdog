@@ -2,7 +2,7 @@
 
 [中文说明](README.zh-CN.md)
 
-This skill monitors public X posts from Codex lead `thsottiaux`, detects future-actionable Codex reset signals, and outputs findings through Codex Automation. It helps users learn about major changes before a reset happens, so they can spend remaining quota intentionally, including switching to fast mode when useful.
+This skill monitors public X posts from Codex lead `thsottiaux`, detects future-actionable Codex reset signals, and creates a new Codex alert Thread through Codex Automation, falling back to a finding when thread creation is unavailable. It helps users learn about major changes before a reset happens, so they can spend remaining quota intentionally, including switching to fast mode when useful.
 
 ## How To Use?
 
@@ -41,7 +41,7 @@ Do not paste raw JSON unless I explicitly ask. In the final summary, do not narr
 
 If everything works, click **Automations** in the Codex left navigation. You should see an Automation named **Codex Reset Watchdog**. Open it, then click the **Run Now** button in the top right.
 
-You should see a new run under **Previous Runs**. Open it to inspect the details. Automation run output may stay inside Automations instead of appearing in normal chats. The user-facing alert path is a Triage finding, which should be created only when there is a new future-actionable reset signal. If recent `thsottiaux` posts are parsed correctly and the report says whether action is needed, the full workflow is working.
+You should see a new run under **Previous Runs**. Open it to inspect the details. Automation run output may stay inside Automations instead of appearing in normal chats. The user-facing alert path is a new Codex Thread when there is a future-actionable reset signal, with Triage/Inbox finding as fallback when thread creation is unavailable. No Thread or finding should be created for routine no-action runs. If recent `thsottiaux` posts are parsed correctly and the report says whether action is needed, the basic workflow is working.
 
 [previous runs screenshot](images/previous-runs.png)
 
@@ -53,7 +53,7 @@ You do not need to wait for the next real reset. Temporarily add this to your pr
 WATCHDOG_TEST_FIXTURE=future-reset
 ```
 
-Then click the Automation **Run Now/Test** button. This button only runs the current Automation immediately and cannot pass temporary parameters such as `--test-fixture`, so the smoke-test switch must already be present in `env` / `.env`. The script emits a synthetic “reset tomorrow morning” item with `notification_test=true` and does not write to the real state file. The expected result is a report or Triage finding clearly labeled TEST with a future reset time. Remove or blank `WATCHDOG_TEST_FIXTURE` immediately after the smoke test.
+Then click the Automation **Run Now/Test** button. This button only runs the current Automation immediately and cannot pass temporary parameters such as `--test-fixture`, so the smoke-test switch must already be present in `env` / `.env`. The script emits a synthetic “reset tomorrow morning” item with `notification_test=true` and does not write to the real state file. The expected result is a new Codex Thread clearly labeled TEST with a future reset time; if thread creation is unavailable, the fallback is a TEST Triage/Inbox finding. Remove or blank `WATCHDOG_TEST_FIXTURE` immediately after the smoke test.
 
 ## Want To Monitor More Sources?
 

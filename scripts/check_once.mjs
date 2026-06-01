@@ -623,7 +623,7 @@ function transientNetworkSummary(error, store, args) {
     review_count: 0,
     has_review_items: false,
     review_items: [],
-    notification_surface: "codex_automation_triage",
+    notification_surface: "codex_thread_or_automation_triage",
     dry_run: Boolean(args.dryRun),
     state: store.info(),
     operational_error: {
@@ -656,7 +656,7 @@ function runtimeErrorSummary(error, args, store = null) {
     review_count: 0,
     has_review_items: false,
     review_items: [],
-    notification_surface: "codex_automation_triage",
+    notification_surface: "codex_thread_or_automation_triage",
     dry_run: Boolean(args.dryRun),
     state: store?.info?.() || null,
     operational_error: {
@@ -775,8 +775,8 @@ export async function main() {
       review_items: reviewItems,
       fetched_items: candidates.map(buildFetchedItem),
       llm_instruction:
-        "Use run_time plus created_at_local/local_timezone. Use 🚨 only for actionable future reset/refill/restored allowance signals. Treat completed or past reset posts as historical/no-action. If notification_test=true, create only a clearly marked TEST Triage finding. If no new_items and no actionable future/unclear signal remains, return a compact no-action summary without the full repeated table. Report a Codex Triage finding only for qualifying new review_items. Do not output process narration, raw JSON, or routine memory notes.",
-      notification_surface: "codex_automation_triage",
+        "Use run_time plus created_at_local/local_timezone. Use 🚨 only for actionable future reset/refill/restored allowance signals. Treat completed or past reset posts as historical/no-action. If notification_test=true or an actionable/unclear future reset exists, create a clearly marked Codex Thread when create_thread is available; otherwise create a Triage/Inbox finding. If no new_items and no actionable future/unclear signal remains, return a compact no-action summary without the full repeated table. Do not output process narration, raw JSON, or routine memory notes.",
+      notification_surface: "codex_thread_or_automation_triage",
       dry_run: Boolean(args.dryRun),
       results,
     };

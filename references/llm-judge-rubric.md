@@ -2,9 +2,9 @@
 
 Use this rubric for every item in `review_items` emitted by `scripts/check_once.mjs`. The Node script has fetched the Dayclaw public source item and preserved available metadata; do not infer missing thread content.
 
-If the run JSON has `notification_test=true`, this is a synthetic smoke test. You may create a finding only if it is clearly labeled TEST; never present the fixture as a real Dayclaw/X signal.
+If the run JSON has `notification_test=true`, this is a synthetic smoke test. You may create an alert only if it is clearly labeled TEST; never present the fixture as a real Dayclaw/X signal.
 
-## Promote to a Triage finding when
+## Promote to an alert when
 
 The item probably means one of these:
 
@@ -25,13 +25,15 @@ The item probably means one of these:
 
 ## Output expectation inside Codex Automation
 
-If you promote an item, create one concise Codex Triage finding containing:
+If you promote an item, first create a new Codex Thread when the `create_thread` tool is available. Use a projectless thread titled `🚨 Codex reset alert` or `TEST Codex reset watchdog`, and include:
 
 - why it likely signals a Codex reset/refill/restored allowance/remediation;
 - reset timing, including the item wording and an absolute date derived from `created_at_local` plus `local_timezone` when possible;
 - item text and available context when relevant;
 - author, created time, URL, and event key.
 
+If `create_thread` is unavailable, create one concise Codex Triage/Inbox finding with the same content.
+
 If several items are clearly the same reset event, report only the strongest one. Mention that duplicates were ignored.
 
-If no item should be promoted, create no Triage finding and return the concise no-reset run summary described in `SKILL.md`.
+If no item should be promoted, create no Thread or Triage/Inbox finding and return the concise no-reset run summary described in `SKILL.md`.

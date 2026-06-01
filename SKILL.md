@@ -5,9 +5,9 @@ description: Set up a Codex Automation-only, LLM-first check for pre-announcemen
 
 # Codex Reset Watchdog
 
-Use this skill to implement or maintain a **Codex Automation-only** Dayclaw public-source check. The default target is `@thsottiaux` (`https://x.com/thsottiaux`) via `https://api.dayclaw.com/api/source/public/x/thsottiaux/items`. The skill reports a Codex Automation finding when the Automation LLM judges that an item likely announces, confirms, schedules, completes, or remediates a Codex usage/quota/rate-limit reset, quota refill, restored allowance, or related make-good.
+Use this skill to implement or maintain a **Codex Automation-only** Dayclaw public-source check. The default target is `@thsottiaux` (`https://x.com/thsottiaux`) via `https://api.dayclaw.com/api/source/public/x/thsottiaux/items`. The skill reports through a new Codex Thread when possible, or a Codex Automation finding otherwise, when the Automation LLM judges that an item likely announces, confirms, schedules, completes, or remediates a Codex usage/quota/rate-limit reset, quota refill, restored allowance, or related make-good.
 
-This skill intentionally does **not** send Telegram, Discord, Slack, ntfy, email, or generic webhook messages. The notification surface is Codex itself: `scripts/check_once.mjs` emits structured JSON with `review_items`, and the scheduled Codex Automation posts a Triage finding only when its LLM sees a reset signal.
+This skill intentionally does **not** send Telegram, Discord, Slack, ntfy, email, or generic webhook messages. The notification surface is Codex itself: `scripts/check_once.mjs` emits structured JSON with `review_items`, and the scheduled Codex Automation creates a Codex Thread or Triage/Inbox finding only when its LLM sees a reset signal.
 
 ## Required setup shape
 
@@ -47,7 +47,7 @@ Set `WATCHDOG_TEST_FIXTURE=future-reset` only for a one-off notification smoke t
 7. Retry transient Dayclaw DNS/network failures inside the same run. If all retries fail, emit JSON `status=transient_network_error` and report on the threshold failure, then only every `OPERATIONAL_ERROR_REPORT_EVERY_FAILURES` failures while the outage continues.
 8. When repeated `fetch failed` errors happen, run `node scripts/check_once.mjs --diagnose-network --json` from the same Automation working directory. If DNS or HTTPS reachability fails, treat it as a runtime network issue and keep the Automation active.
 9. On the first run, default to priming state rather than reviewing old items. Set `ALERT_ON_FIRST_RUN=true` only when the user explicitly wants a historical scan.
-10. For findings, the Automation LLM should include item text, author handle, URL, creation time, event key, and a concise rationale.
+10. For alerts, the Automation LLM should include item text, author handle, URL, creation time, event key, and a concise rationale.
 
 ## Long-running lifecycle
 
@@ -94,15 +94,16 @@ Every scheduled run should follow this protocol:
 1. Work from the Automation working directory that contains `SKILL.md` and `scripts/check_once.mjs`.
 2. Run `node scripts/check_once.mjs --json`.
 3. Parse the JSON. Never paste the full JSON object into the user-facing run result unless debugging was explicitly requested.
-4. If the command fails before parseable JSON is produced, create one Codex Triage operational finding with sanitized command output.
+4. If the command fails before parseable JSON is produced, create one Codex Triage/Inbox operational finding with sanitized command output.
 5. If JSON `status` is `error`, create one operational finding with `operational_error.detail`.
 6. If JSON `status` is `transient_network_error`, create an operational finding only when `operational_error.report_to_triage` is true. For repeated network/fetch failures, run `node scripts/check_once.mjs --diagnose-network --json` and include `dns`, `http`, `network_ok`, and `hint`.
 7. If `api_warning` is present, create one operational finding with `source_url`, `fetched`, `api_warning`, and `api_pages`.
-8. If `review_items` is non-empty, judge every item with `references/llm-judge-rubric.md`. Create a Triage finding only for new items that probably announce or schedule an actionable future Codex usage/quota/rate-limit reset, refill, restored allowance, or make-good.
-9. Use `fetched_items` for context even when `review_items` is empty because the state was already primed. Do not create Triage findings from already-seen `fetched_items`; use them only to decide whether an already-seen future signal is still actionable or has become historical.
+8. If `review_items` is non-empty, judge every item with `references/llm-judge-rubric.md`. Alert only for new items that probably announce or schedule an actionable future Codex usage/quota/rate-limit reset, refill, restored allowance, or make-good.
+9. Use `fetched_items` for context even when `review_items` is empty because the state was already primed. Do not create alerts from already-seen `fetched_items`; use them only to decide whether an already-seen future signal is still actionable or has become historical.
 10. Always end with a concise reset-focused Markdown report. The first visible line must be an emoji-led banner: `🚨 Actionable Codex reset ahead: <what>. Reset timing: <future time>.`, `⚠️ Possible future Codex reset needs review: <why>.`, or `✅ No actionable future Codex reset signal.`
 11. Do not read or write automation memory for routine runs. Write memory only for setup completion, configuration changes, positive reset findings, reportable operational errors, or explicit user-requested diagnostics.
-12. If JSON includes `notification_test=true`, treat the run as a smoke test: create only a clearly marked TEST Triage finding/report, never describe it as a real Dayclaw/X signal.
+12. If JSON includes `notification_test=true`, treat the run as a smoke test: create only a clearly marked TEST alert/report, never describe it as a real Dayclaw/X signal.
+13. For actionable future reset, unclear future reset, or `notification_test=true`, first try to create a new Codex Thread when the `create_thread` tool is available. Use a projectless thread titled `🚨 Codex reset alert` or `TEST Codex reset watchdog`, and put reset timing, evidence, source link, and TEST status in the thread prompt. If thread creation is unavailable, fall back to one Triage/Inbox finding. Do not create threads or findings for routine no-action runs.
 
 Run reports should be short and reviewable:
 
@@ -114,7 +115,7 @@ Run reports should be short and reviewable:
 - set `Reset?` to `🚨 future`, `history`, `✅ no`, or `⚠️ unclear`; one unclear future row is enough reason to mention that a human should review it;
 - fill `Reset timing` for every `yes` or `unclear` row. Use the item's wording (`tomorrow morning`, `later today`, `after the deploy`) and derive an absolute date from `created_at_local` plus `local_timezone`; do not say timezone unknown when `local_timezone` is present. Use `-` for clear no rows;
 - keep each `Item` cell to one concise sentence and use the item URL as a short Markdown link;
-- include `new_items` / `review_count` and whether a Triage finding was created;
+- include `new_items` / `review_count` and whether a Thread or Triage/Inbox finding was created;
 - mention source health only when useful;
 - avoid process narration such as checking memory, waiting for commands, choosing paths, writing memory, or restating every command.
 
@@ -150,9 +151,9 @@ Summarize setup in human language:
 - source URL and whether Dayclaw is reachable;
 - state file path and fallback status;
 - Automation cadence and command;
-- what the Codex Automations **Test/Run Now** button should show. Explain that it is an immediate normal run, not a parameterized test mode.
+- what the Codex Automations **Test/Run Now** button should show. Explain that it is an immediate normal run, not a parameterized test mode, and that a positive smoke test should create a TEST Codex Thread when thread creation is available.
 
-To test the notification path without waiting for a real reset, temporarily set `WATCHDOG_TEST_FIXTURE=future-reset` in the private `env` or `.env`, then click the Automation **Test/Run Now** button. The button cannot pass `--test-fixture`; the env variable is the test switch. Verify that the report/finding is clearly marked TEST and shows a future reset, then remove or blank the variable.
+To test the notification path without waiting for a real reset, temporarily set `WATCHDOG_TEST_FIXTURE=future-reset` in the private `env` or `.env`, then click the Automation **Test/Run Now** button. The button cannot pass `--test-fixture`; the env variable is the test switch. Verify that a new Codex Thread or fallback finding is clearly marked TEST and shows a future reset, then remove or blank the variable.
 
 Do not paste the full JSON output unless debugging.
 
@@ -231,7 +232,7 @@ Then click the Automation **Test/Run Now** button. This is still the normal Auto
 node scripts/check_once.mjs --test-fixture future-reset --json
 ```
 
-The run must include `notification_test=true`, `review_count=1`, and a clearly marked TEST future reset report/finding. Blank `WATCHDOG_TEST_FIXTURE` immediately after the smoke test.
+The run must include `notification_test=true`, `review_count=1`, and a clearly marked TEST future reset report plus a TEST Codex Thread when `create_thread` is available. Blank `WATCHDOG_TEST_FIXTURE` immediately after the smoke test.
 
 ### 7. Create a Codex Automation
 
@@ -248,10 +249,10 @@ node scripts/check_once.mjs --json
 Then it should:
 
 - read `review_items` and judge every item using `references/llm-judge-rubric.md`;
-- report a Triage finding only when an item probably announces or confirms a Codex usage/quota/rate-limit reset, refill, restored allowance, or remediation;
+- create a Codex Thread, or a fallback Triage/Inbox finding, only when an item probably announces or confirms a Codex usage/quota/rate-limit reset, refill, restored allowance, or remediation;
 - if multiple items are clearly the same event, report only the strongest one;
 - report command failures or repeated source errors when likely to cause missed detections;
-- create no Triage finding when there are no review items, no positive LLM judgment, and no reportable operational errors;
+- create no Thread or Triage/Inbox finding when there are no review items, no positive LLM judgment, and no reportable operational errors;
 - return a concise human Markdown report with a fetched-items table, source reachability, fetched/new counts, and reset finding status; do not rely on knowing whether the run came from the Test button or the schedule;
 - do not write automation memory for routine `status=ok`, `new_items=0`, `review_count=0` runs.
 
@@ -266,12 +267,12 @@ Do not run `self_test`, `--prime-state`, or `--dry-run` during ordinary schedule
 - `review_count`: number of new unseen items emitted for LLM review.
 - `has_review_items`: boolean; true when `review_items` is non-empty.
 - `review_items`: structured new items with text, URL, author, event key, UTC and local created time, and reply metadata when available.
-- `fetched_items`: read-only summary of the current fetched batch with `created_at_utc`, `created_at_local`, and `local_timezone`; use it for the human reset/no-reset table, but create Triage findings only from qualifying new `review_items`.
+- `fetched_items`: read-only summary of the current fetched batch with `created_at_utc`, `created_at_local`, and `local_timezone`; use it for the human reset/no-reset table, but create alerts only from qualifying new `review_items`.
 - `api_pages`: API diagnostics with response keys, source URL, limit, and extracted item count.
 - `api_warning`: present when the API succeeds but no item can be extracted.
 - `run_time`: current run time with UTC and local timezone fields; compare candidate reset timing against this before deciding whether a signal is still actionable.
 - `report_timezone`: Automation runtime/user timezone used for local display; overridden only by `REPORT_TIMEZONE`.
-- `notification_test`: true only for synthetic notification smoke tests; any finding/report must be marked TEST.
+- `notification_test`: true only for synthetic notification smoke tests; any Thread, finding, or report must be marked TEST.
 - `test_fixture`: fixture name such as `future-reset`, otherwise null.
 - `fetch_strategy`: `dayclaw_public_items` in production, `test_fixture` during notification smoke tests.
 - `state`: actual state file path, requested path, fallback status, and related warnings.

@@ -2,18 +2,67 @@
 
 [English README](README.md)
 
-这是一个零依赖 Codex skill 仓库，用 **Codex Automation** 通过 Dayclaw 公共 X source 监控 [`@thsottiaux`](https://x.com/thsottiaux)。脚本会把所有新抓到且未处理过的 item 交给 Automation LLM 判断；只有 LLM 发现 Codex usage / quota / rate-limit reset 信号时，才通过 Codex Automation / Triage 输出 finding。
+本 skill 的主要作用是通过监控 Codex 负责人 thsottiaux 在 X 上的公开动态，及时发现未来仍可行动的 Codex reset 信号，并通过 Codex Automation 输出 finding，帮助用户在 reset 前了解可能影响 Codex 使用的重大变更，从而更有意识地消耗剩余额度，必要时切换 fast 模式，减少浪费。
 
-## 功能
 
-- 一段 prompt 完成 setup：Codex 从 GitHub 安装 skill、跑基础验证、初始化 state，并创建 hourly Automation。
-- 不需要付费 API key：默认 source 是 `https://api.dayclaw.com/api/source/public/x/thsottiaux/items`。
-- 判断更像人：Codex Automation LLM 会审阅所有新 item，减少规则预筛带来的漏判。
-- 只在值得注意时打扰：没有 reset / refill / restored allowance 信号时不发 Triage、不写 routine memory。
-- 不重复提醒：同一个 item 只处理一次，后续新消息仍可继续触发。
-- 网络抖动不刷屏：短暂 Dayclaw DNS/network 失败不会立刻变成噪声告警。
-- Automation 运行结果返回醒目的可审阅报告：用户点 Test 或查看 run log 时，应该看到 emoji 信号、reset 时间和 fetched items 表格，而不是整坨 JSON。
-- 通知面单一：所有结果只进入 Codex Automation / Triage，不外发到聊天软件或 webhook。
+## 如何使用？
+
+### 复制黏贴 prompt
+
+打开 Codex，点击 New Chats 按钮，新建一个 chat。然后直接复制黏贴以下这段 prompt。Codex 会自己安装本 skill、跑基础检查、初始化基线 state，并创建每小时运行的 Automation。
+
+```text
+请从 GitHub 安装并设置 codex-reset-watchdog skill：
+https://github.com/thinkingjimmy/codex-reset-watchdog
+
+优先使用 Codex 的 skill installation workflow。如果没有可用 installer，就 clone 这个 repo，并把该目录作为 Automation working directory。
+
+安装后：
+1. 找到包含 SKILL.md 和 scripts/check_once.mjs 的 skill 目录。
+2. 运行 node scripts/self_test.mjs。
+3. 运行 node scripts/check_once.mjs --prime-state --json 创建基线 state。
+4. 运行 node scripts/check_once.mjs --dry-run --json 一次，确认 Dayclaw public source、JSON 解析和 state 去重正常。
+5. 创建一个每小时运行的 Codex Automation：
+   - working directory/cwds：已安装的 codex-reset-watchdog 目录
+   - prompt：完整使用 references/automation-prompt.md，不要自由改写；它只是让 Automation 使用 skill 的薄启动器
+   - permissions：如果 Automation tool 没有 permissions 字段，就依赖安装目录里的 .codex/config.toml profile codex-reset-watchdog-net
+6. 调用 Codex Automation 创建工具时，不要猜参数形态：
+   - 先查看工具 schema 或现有 Automation config；
+   - 使用当前工具接受的 hourly schedule 格式；如果 schema 显示 `rrule`，优先用 `RRULE:FREQ=HOURLY;INTERVAL=1`；
+   - working directory 按当前工具要求传 `cwd` 或 `cwds`，不要猜数组/字符串；
+   - 如果 schema 没有 `command` 或 `permissions` 字段，不要硬造字段；命令写在 thin prompt 里，权限来自 `.codex/config.toml`；
+   - 如果当前工具实际要求 `model` 和 `reasoningEffort`/`reasoning`，即使 schema 标成 optional 也要补上；
+   - 创建后读回 Automation，确认频率、working directory、active 状态、command 和 prompt 没有被工具层改写。
+7. 最后给我一个简洁 setup 总结：成功/失败、Automation 频率、working directory、state 路径，以及我点击 Codex Test 按钮时应该看到什么。
+
+不要贴原始 JSON，除非我明确要求。最终总结里不要叙述已经成功绕过的 schema 重试；只有创建最终失败或我要求 debug 时才提。不要开启 full access，除非窄网络权限路径不可用，并且你先解释取舍。
+```
+
+### 测试 Automation
+
+如果一切顺利，你可以点击 Codex 左导航的 Automations 标签，看到一个名为「Codex Reset Watchdog」的 Automation。点击它进入详情页，然后右上角的 Run Now 按钮。你应该会在 Previous Runs 看到一次新的运行记录，点开它可以看到运行的细节。Automation 的运行输出可能只留在 Automations 里，不一定出现在普通 chats；真正面向用户的提醒路径是 Triage finding，而且只应该在发现新的、未来仍可行动的 reset 信号时创建。如果你能看到 thsottiaux 最近的动态被正确解析，并且报告明确说明是否需要行动，那就说明整个流程是通的。
+
+[previous runs screenshot](images/previous-runs.png)
+
+## 想要监控更多信息？
+
+如果你想要监控 thsottiaux 账号以外的信息，比如其他账号、Reddit、新闻源等，你可以注册 [Dayclaw](https://dayclaw.com/)。
+
+## 时区与 env
+
+一般各位不需要修改或创建 env 文件，使用默认配置时，Codex 会监控 `@thsottiaux`，把状态写到 `var/state.json`，并使用 Automation 的运行环境来展示时间。但如果你想让输出 finding 里展示符合你的习惯的时间，就需要创建一个 env 文件，覆盖默认的 `REPORT_TIMEZONE`：
+
+1. 复制 [`env.example`](env.example)。
+2. 把副本改名为 `env` 或 `.env`。`env` 在 Finder 里更容易看到；`.env` 是开发者常用命名。
+3. 只修改你真正需要的字段。如果要强制使用某个报告时区，把 `REPORT_TIMEZONE` 设为 IANA timezone：
+
+```env
+REPORT_TIMEZONE=America/Los_Angeles
+```
+
+常见示例：`Asia/Shanghai`、`America/Los_Angeles`、`America/New_York`、`Europe/London`、`Europe/Berlin`、`UTC`。
+
+留空 `REPORT_TIMEZONE` 会使用 Automation 运行环境/用户时区。这是默认推荐方式。
 
 ## Skill 结构
 
@@ -40,170 +89,3 @@ codex-reset-watchdog/
     check_once.mjs                 # 零依赖 Automation 入口
     self_test.mjs                  # 本地确定性自测
 ```
-
-## 一段 Prompt 完成安装
-
-打开 Codex，直接复制这段 prompt。Codex 应该自己安装 skill、跑基础检查、初始化基线 state，并创建每小时运行的 Automation。
-
-```text
-请从 GitHub 安装并设置 codex-reset-watchdog skill：
-https://github.com/thinkingjimmy/codex-reset-watchdog
-
-优先使用 Codex 的 skill installation workflow。如果没有可用 installer，就 clone 这个 repo，并把该目录作为 Automation working directory。
-
-安装后：
-1. 找到包含 SKILL.md 和 scripts/check_once.mjs 的 skill 目录。
-2. 运行 node scripts/self_test.mjs。
-3. 运行 node scripts/check_once.mjs --prime-state --json 创建基线 state。
-4. 运行 node scripts/check_once.mjs --dry-run --json 一次，确认 Dayclaw public source、JSON 解析和 state 去重正常。
-5. 创建一个每小时运行的 Codex Automation：
-   - working directory：已安装的 codex-reset-watchdog 目录
-   - command：node scripts/check_once.mjs --json
-   - prompt：完整使用 references/automation-prompt.md，不要自由改写；它只是让 Automation 使用 skill 的薄启动器
-   - permissions：优先使用项目 .codex/config.toml 里的 codex-reset-watchdog-net；否则只授予 workspace write 和到 api.dayclaw.com 的 outbound HTTPS
-6. 调用 Codex Automation 创建工具时，不要猜参数形态：
-   - 先查看工具 schema 或现有 Automation config；
-   - 使用当前工具接受的 hourly schedule 格式；如果普通 "hourly" 被拒，就用带 DTSTART 的 iCalendar RRULE；
-   - working directory 按当前工具要求传 cwd 或 cwds，不要猜数组/字符串；
-   - 如果当前工具实际要求 model 和 reasoning，即使 schema 标成 optional 也要补上；
-   - 创建后读回 Automation，确认频率、working directory、active 状态、command 和 prompt 没有被工具层改写。
-7. 最后给我一个简洁 setup 总结：成功/失败、Automation 频率、working directory、state 路径，以及我点击 Codex Test 按钮时应该看到什么。
-
-不要贴原始 JSON，除非我明确要求。不要开启 full access，除非窄网络权限路径不可用，并且你先解释取舍。
-```
-
-不需要申请 API key。默认 source 是：
-
-```text
-https://api.dayclaw.com/api/source/public/x/thsottiaux/items
-```
-
-Codex 会先验证脚本能跑，再把当前已有 public items 标记为基线，最后用 [`references/automation-prompt.md`](references/automation-prompt.md) 的完整内容创建定时 Automation。这个 prompt 很薄；真正的运行规则在 [`SKILL.md`](SKILL.md)，reset 判断标准在 [`references/llm-judge-rubric.md`](references/llm-judge-rubric.md)。没有 reset 信号时不会发 Triage finding。
-
-创建 Automation 时应当使用这些文件作为准绳，而不是让 Codex 临场发挥。
-
-## Test 应该显示什么
-
-Setup 后，点击 Codex Automations 里的 **Test**。Codex 对 Test 和定时运行使用同一份 Automation prompt，所以每次运行都会用一段简短 Markdown 报告收尾，例如：
-
-```text
-✅ 未发现 Codex reset 信号。
-
-| 时间 | Reset? | Reset 时间 | 内容 | 链接 |
-| --- | --- | --- | --- | --- |
-| 2026-05-29 01:40 | ✅ no | - | Codex Thursday 改到 Friday；没有 usage/quota reset 语义。 | link |
-| 2026-05-27 14:59 | ✅ no | - | Codex model availability 更新；没有 allowance refill 或 rate-limit reset。 | link |
-
-Fetched：10；新 item：0；review items：0；Triage finding：无。
-Source 健康。
-```
-
-如果发现 reset 信号，第一行应该更醒目，并直接给出时间：
-
-```text
-🚨 发现 Codex reset 信号：limits will reset tomorrow morning。Reset 时间：2026-06-01 morning（来自 "tomorrow morning"，报告时区：用户本地时区）。
-```
-
-结果不应该直接贴 `check_once.mjs --json` 的完整对象。健康 no-op 运行不应创建 Triage finding、不应外发通知、不应写 routine memory；简短报告可以出现在 Automation run log 和 Test 结果里。
-
-## 状态与去重
-
-`STATE_FILE_PATH` 指向持久 JSON 文件。报告默认使用 Automation 运行环境/用户时区；只有需要强制覆盖时才设置 `REPORT_TIMEZONE` 为 IANA timezone。
-
-- `seen_tweets`：同一 public source item 不会每次重复交给 LLM。
-- `operational_failures`：记录连续 Dayclaw 网络故障。
-- 未来新的 reset item 有新 tweet/item ID，仍然可以进入 LLM 审阅并产生 finding。
-
-默认状态文件位置：
-
-```env
-STATE_FILE_PATH=var/state.json
-```
-
-`var/` 已被 git 忽略，并且在 Codex 沙箱运行时可写。如果你自己配置了 home 目录下的路径而 Codex 没有权限写入，脚本会自动 fallback 到 `var/state.json`，并在输出 JSON 的 `state` 字段里说明。
-
-## 输出格式
-
-`check_once.mjs --json` 输出一个 JSON 对象。重要字段：
-
-- `status`：`ok`、`primed`、`state_updated`、`transient_network_error`、`network_diagnostic` 或 `error`。
-- `source_url`：本次使用的 Dayclaw public source endpoint。
-- `review_count`：交给 LLM 审阅的新 item 数量。
-- `has_review_items`：`review_items` 是否非空。
-- `review_items`：所有新的未见 item，包含正文、URL、作者、回复元数据、event key 和可用上下文字段。
-- `fetched_items`：当前 fetched batch 的只读摘要，包含 `created_at_utc`、`created_at_local` 和 `local_timezone`；即使所有 item 都已见过，也用于生成面向人的审阅表格。
-- `api_pages`：API 返回摘要，包括返回键、source URL、limit 和提取到的 item 数量。
-- `api_warning`：API 成功但没有提取到任何 item 时出现。
-- `state`：实际使用的状态文件路径、用户请求的路径、是否发生 fallback，以及相关 warning。
-- `fetch_strategy`：固定为 `dayclaw_public_items`。
-- `llm_instruction`：给 Automation LLM 的简短判断指令。
-- `operational_error`：网络或运行错误；是否报警由 Automation prompt 决定。
-- `results`：每条 item 的处理细节，例如 `queued_for_llm`、`already_seen`、`ignored_reply`。
-
-`api.dayclaw.com` 的 DNS 抖动会在同一轮内自动重试。如果重试后仍失败，脚本会输出 `status: "transient_network_error"` 并正常退出，避免一次网络抖动就刷 Triage。
-
-## Public Source 说明
-
-Dayclaw endpoint 当前返回固定数量的公开最近 items：
-
-```text
-https://api.dayclaw.com/api/source/public/x/thsottiaux/items
-```
-
-运行逻辑是：
-
-- 首次 prime 时把当前 batch 标记为已见。
-- 普通定时运行抓取 public batch，并用本地 state 按稳定 tweet/item ID 去重。
-- public feed 有可用 reply metadata 时会保留，但不提供完整 parent-thread hydration。
-- 如果 feed 没有返回可提取 item，脚本会输出 `api_warning`，让 Automation 报告一次运行问题。
-
-## 权限建议
-
-这个 skill 的真实权限需求很小：
-
-- 读取当前项目里的 `env` / `.env`。
-- 写入当前项目里的 `var/state.json`。
-- 通过 HTTPS 访问 `https://api.dayclaw.com`。
-
-仓库已经内置推荐配置：`.codex/config.toml`。它定义了 `codex-reset-watchdog-net`，只给当前 workspace 写入权限，并且只放行 `api.dayclaw.com`：
-
-```toml
-default_permissions = "codex-reset-watchdog-net"
-
-[permissions.codex-reset-watchdog-net.filesystem]
-":minimal" = "read"
-
-[permissions.codex-reset-watchdog-net.filesystem.":workspace_roots"]
-"." = "write"
-
-[permissions.codex-reset-watchdog-net.network]
-enabled = true
-
-[permissions.codex-reset-watchdog-net.network.domains]
-"api.dayclaw.com" = "allow"
-```
-
-第一次用 Codex 打开这个项目时，如果 Codex 提示是否信任项目配置，请先查看 `.codex/config.toml`，确认只包含上面的最小权限后再信任。如果权限选择器里有 `Custom (config.toml)`，请选择它。
-
-注意：Codex 的 permission profiles 和旧 `sandbox_mode` 不会叠加。如果当前 Codex 仍使用旧的 `workspace-write` sandbox，`default_permissions` 可能不会生效，Node CLI 依然会被挡在网络外。为兼容这种情况，仓库还内置了 `.codex/rules/codex-reset-watchdog.rules`，只允许 `node scripts/check_once.mjs` 这个入口越过 sandbox。
-
-不建议为了这个 skill 开启 full access。full access 会扩大文件系统读写范围，超过了脚本需要的最小权限。
-
-## 网络诊断
-
-如果 Automation 返回 `status: "transient_network_error"`、`root_cause: "connection_error"` 或 `detail: "fetch failed"`，先在同一个 Automation 工作目录运行：
-
-```bash
-node scripts/check_once.mjs --diagnose-network --json
-```
-
-这个命令会检查 `api.dayclaw.com` 的 DNS 解析和 HTTPS 触达能力。如果 `dns.ok=false` 或 `http.reached=false`，问题在运行环境的出站网络，不是 item 内容、LLM 判断或 state 去重。解决方式是给 Automation runtime 放行到 `https://api.dayclaw.com` 的出站 HTTPS，而不是扩大文件系统权限。
-
-如果 `network_ok=true` 但正式检查仍失败，再检查 `source_url`、`api_pages` 和 `api_warning`。
-
-## 链接
-
-- 目标账号：<https://x.com/thsottiaux>
-- Dayclaw public source：<https://api.dayclaw.com/api/source/public/x/thsottiaux/items>
-- Codex Skills 文档：<https://developers.openai.com/codex/skills>
-- Codex Automations 文档：<https://developers.openai.com/codex/app/automations>

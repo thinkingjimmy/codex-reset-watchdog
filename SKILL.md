@@ -95,18 +95,19 @@ Every scheduled run should follow this protocol:
 5. If JSON `status` is `error`, create one operational finding with `operational_error.detail`.
 6. If JSON `status` is `transient_network_error`, create an operational finding only when `operational_error.report_to_triage` is true. For repeated network/fetch failures, run `node scripts/check_once.mjs --diagnose-network --json` and include `dns`, `http`, `network_ok`, and `hint`.
 7. If `api_warning` is present, create one operational finding with `source_url`, `fetched`, `api_warning`, and `api_pages`.
-8. If `review_items` is non-empty, judge every item with `references/llm-judge-rubric.md`. Create a Triage finding only for new items that probably announce, confirm, schedule, complete, or remediate a Codex usage/quota/rate-limit reset, refill, restored allowance, or make-good.
-9. Use `fetched_items` for the human report even when `review_items` is empty because the state was already primed. Do not create Triage findings from already-seen `fetched_items`; they are context for the review table only.
-10. Always end with a concise reset-focused Markdown report. The first visible line must be an emoji-led banner: `🚨 Codex reset signal found: <what>. Reset timing: <when>.`, `⚠️ Possible Codex reset signal needs review: <why>.`, or `✅ No Codex reset signal found.`
+8. If `review_items` is non-empty, judge every item with `references/llm-judge-rubric.md`. Create a Triage finding only for new items that probably announce or schedule an actionable future Codex usage/quota/rate-limit reset, refill, restored allowance, or make-good.
+9. Use `fetched_items` for context even when `review_items` is empty because the state was already primed. Do not create Triage findings from already-seen `fetched_items`; use them only to decide whether an already-seen future signal is still actionable or has become historical.
+10. Always end with a concise reset-focused Markdown report. The first visible line must be an emoji-led banner: `🚨 Actionable Codex reset ahead: <what>. Reset timing: <future time>.`, `⚠️ Possible future Codex reset needs review: <why>.`, or `✅ No actionable future Codex reset signal.`
 11. Do not read or write automation memory for routine runs. Write memory only for setup completion, configuration changes, positive reset findings, reportable operational errors, or explicit user-requested diagnostics.
 
 Run reports should be short and reviewable:
 
-- explain the reset/no-reset conclusion using fetched item wording; do not downgrade a positive fetched signal merely because `new_items=0` or no Triage finding is allowed;
+- compare candidate reset timing against `run_time.created_at_local` plus `local_timezone`; the alert exists to help the user spend tokens before reset, so completed or past resets are historical and not actionable;
+- explain the actionable/no-action conclusion using fetched item wording; do not call a completed reset `🚨` just because the text contains “reset”;
 - include a Markdown table for `fetched_items` with columns `Time`, `Reset?`, `Reset timing`, `Item`, and `Link`;
-- include all fetched rows when there are 10 or fewer; if there are more, show the newest 10 and say how many were omitted;
-- put rows with `Reset?` = `🚨 yes` or `⚠️ unclear` before `✅ no` rows so the signal is not buried;
-- set `Reset?` to `🚨 yes`, `✅ no`, or `⚠️ unclear`; one unclear row is enough reason to mention that a human should review it;
+- include the table only when there is a new review item, an actionable future reset, an unclear future signal, or an explicit diagnostic/test request; routine `new_items=0` runs with only historical/completed signals should return a compact no-action summary instead of repeating the full table;
+- put rows with `Reset?` = `🚨 future` or `⚠️ unclear` before `✅ no` and `history` rows so the signal is not buried;
+- set `Reset?` to `🚨 future`, `history`, `✅ no`, or `⚠️ unclear`; one unclear future row is enough reason to mention that a human should review it;
 - fill `Reset timing` for every `yes` or `unclear` row. Use the item's wording (`tomorrow morning`, `later today`, `after the deploy`) and derive an absolute date from `created_at_local` plus `local_timezone`; do not say timezone unknown when `local_timezone` is present. Use `-` for clear no rows;
 - keep each `Item` cell to one concise sentence and use the item URL as a short Markdown link;
 - include `new_items` / `review_count` and whether a Triage finding was created;
@@ -117,7 +118,7 @@ The Automation prompt cannot reliably know whether a run came from the Test butt
 
 ## Reset judgment policy
 
-Promote when the item probably says Codex usage limits, weekly limits, quotas, rate limits, caps, credits, allowance, or capacity will be reset, refilled, restored, replenished, topped up, raised, or made good. Future scheduled language is a positive signal: `will reset`, `resetting tomorrow morning`, `later today`, `this week`, `after the deploy`, and similar wording all qualify.
+Promote when the item probably says Codex usage limits, weekly limits, quotas, rate limits, caps, credits, allowance, or capacity will be reset, refilled, restored, replenished, topped up, raised, or made good in the future relative to `run_time`. Future scheduled language is a positive signal: `will reset`, `resetting tomorrow morning`, `later today`, `this week`, `after the deploy`, and similar wording all qualify while the reset time is still ahead. Once the reset time has passed or another item confirms it is complete, treat it as historical/no-action unless a new future reset is also announced.
 
 Do not promote when “reset” refers to git, branches, local workspace, cache, CLI config, password, tokens, settings, database, environment, session, UI reset button, or when the item negates a reset.
 
@@ -149,7 +150,9 @@ Summarize setup in human language:
 
 Do not paste the full JSON output unless debugging.
 
-When creating the Automation, inspect the current Automation tool schema or an existing Automation config before calling create/update. Current Codex versions may reject guessed parameters. Use an accepted hourly schedule shape, preferably iCalendar `DTSTART` plus `RRULE:FREQ=HOURLY;INTERVAL=1` when plain text cadence fails. Pass the working directory in the exact `cwd`/`cwds` shape the tool expects. Include `model` and `reasoning` if the tool rejects the request without them, even if they appear optional. After creation, read the Automation back and verify cadence, working directory, active status, command, and prompt.
+When creating the Automation, inspect the current Automation tool schema or an existing Automation config before calling create/update. Current Codex versions may reject guessed parameters. If the schema exposes `rrule`, use `RRULE:FREQ=HOURLY;INTERVAL=1`; if it exposes `cwds`, pass the installed skill directory as a list. Do not invent `command` or `permissions` fields when the tool has none: the command is inside `references/automation-prompt.md`, and permissions come from `.codex/config.toml`. Include `model` and `reasoningEffort`/`reasoning` if the tool rejects the request without them, even if they appear optional. After creation, read the Automation back and verify cadence, working directory, active status, command/prompt behavior, and prompt.
+
+Keep setup output user-facing. During installation, short progress updates are fine, but do not make successful schema retries the final story. If creation succeeds, final setup output should be only: Automation ID, cadence, active status, working directory/cwds, prompt source, state path, source health, and Test expectation. Mention rejected parameter attempts only when creation ultimately fails or the user asks for debugging.
 
 ## Maintainer workflow
 
@@ -243,6 +246,7 @@ Do not run `self_test`, `--prime-state`, or `--dry-run` during ordinary schedule
 - `fetched_items`: read-only summary of the current fetched batch with `created_at_utc`, `created_at_local`, and `local_timezone`; use it for the human reset/no-reset table, but create Triage findings only from qualifying new `review_items`.
 - `api_pages`: API diagnostics with response keys, source URL, limit, and extracted item count.
 - `api_warning`: present when the API succeeds but no item can be extracted.
+- `run_time`: current run time with UTC and local timezone fields; compare candidate reset timing against this before deciding whether a signal is still actionable.
 - `report_timezone`: Automation runtime/user timezone used for local display; overridden only by `REPORT_TIMEZONE`.
 - `fetch_strategy`: fixed to `dayclaw_public_items`.
 - `state`: actual state file path, requested path, fallback status, and related warnings.

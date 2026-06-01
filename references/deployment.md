@@ -97,35 +97,32 @@ Known pitfalls:
 
 - Some versions reject plain cadence strings; use the tool's accepted hourly format, preferably iCalendar `DTSTART` plus `RRULE:FREQ=HOURLY;INTERVAL=1`.
 - Some versions distinguish `cwd` string from `cwds` list; pass exactly what the current schema accepts.
-- Some versions require `model` and `reasoning` during cron creation even when the schema marks them optional.
+- Some schemas expose `rrule` and `cwds`, but no `command` or `permissions`; in that case, keep the command in the thin Automation prompt and rely on `.codex/config.toml` for permissions.
+- Some versions require `model` and `reasoningEffort`/`reasoning` during cron creation even when the schema marks them optional.
 - Prompt length is not the first suspect; validate schedule/model/cwd shape before shortening the prompt.
 - After creation, read the Automation back and confirm active status, cadence, working directory, command, and prompt.
 
+If Automation creation succeeds after one or more parameter retries, do not surface the retry story in the final setup summary. Report it only when creation fails or the user asks for debug details.
+
 ## Run summary behavior
 
-Codex Automations may use the same prompt for the Test button and scheduled runs. Because the prompt cannot reliably distinguish them, every run should end with a reviewable Markdown report rather than raw JSON.
+Codex Automation run output lives in Automations/Previous Runs; do not assume routine results appear as chat notifications. The actionable notification surface is a Triage finding, and that should be created only for a new future reset signal.
 
 A healthy no-op run after priming should say:
 
 ```text
-✅ No Codex reset signal found.
-
-| Time | Reset? | Reset timing | Item | Link |
-| --- | --- | --- | --- | --- |
-| 2026-05-29 01:40 | ✅ no | - | Codex Thursday moved to Friday; no usage/quota reset language. | link |
-| 2026-05-27 14:59 | ✅ no | - | Codex model availability update; no allowance refill or rate-limit reset. | link |
-
+✅ No actionable future Codex reset signal.
 Fetched: 10; new items: 0; review items: 0; Triage finding: none.
-Source is healthy.
+Historical reset posts in the current batch are already completed or expired, so no user action is needed.
 ```
 
 A positive run should start with a high-signal banner:
 
 ```text
-🚨 Codex reset signal found: limits will reset tomorrow morning. Reset timing: 2026-06-01 morning (from "tomorrow morning"; report timezone: user's local timezone).
+🚨 Actionable Codex reset ahead: limits will reset tomorrow morning. Reset timing: 2026-06-01 morning (from "tomorrow morning"; report timezone: user's local timezone).
 ```
 
-Healthy no-op runs should not create Triage findings, external notifications, or routine automation memory. The concise report is safe for Automation run logs and Test results.
+Routine no-op runs should not repeat the full fetched-items table, create Triage findings, external notifications, or routine automation memory. The concise report is safe for Automation run logs and Test results.
 
 ## Public source model
 
@@ -201,8 +198,8 @@ Expected behavior:
 
 1. New public source item appears.
 2. Script outputs it in `review_items`.
-3. Codex Automation LLM judges whether it signals a Codex reset/refill/restored allowance/remediation.
-4. Automation posts a Triage finding only for positive judgments.
+3. Codex Automation LLM judges whether it signals an actionable future Codex reset/refill/restored allowance/remediation.
+4. Automation posts a Triage finding only for positive future-actionable judgments.
 5. Script records the item ID in the JSON state file.
 6. Later runs ignore the same item.
 7. A future item with a new ID can still produce a new finding.

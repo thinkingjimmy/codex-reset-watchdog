@@ -6,9 +6,9 @@ Use this rubric for every item in `review_items` emitted by `scripts/check_once.
 
 The item probably means one of these:
 
-- Codex usage limits, weekly limits, quotas, rate limits, caps, credits, allowance, or capacity will be reset, refilled, restored, replenished, topped up, raised, or otherwise made good.
-- A reset/refill/remediation is scheduled or expected soon: later today, tomorrow, this week, after a deploy, after an incident, or similar.
-- Future scheduled wording is positive even if the reset has not happened yet: “will reset”, “resetting tomorrow morning”, “we are going to refill”, “limits should be restored later today”, and similar phrases qualify.
+- Codex usage limits, weekly limits, quotas, rate limits, caps, credits, allowance, or capacity will be reset, refilled, restored, replenished, topped up, raised, or otherwise made good in the future relative to `run_time`.
+- A reset/refill/remediation is scheduled or expected soon and is still actionable: later today, tomorrow, this week, after a deploy, after an incident, or similar.
+- Future scheduled wording is positive while the reset is still ahead: “will reset”, “resetting tomorrow morning”, “we are going to refill”, “limits should be restored later today”, and similar phrases qualify.
 - The target author gives a terse affirmative reply only when the provided item text or metadata makes the Codex quota/usage reset context clear.
 - The wording avoids the word “reset” but means the same operational outcome, for example “affected users should get their weekly allowance back” or “we’ll take care of folks who hit the limit because of the incident”.
 
@@ -18,6 +18,7 @@ The item probably means one of these:
 - The author negates the reset: no, nope, no reset, not planned, won’t, cannot, not doing that.
 - The context is too vague to connect it to Codex usage/quota/rate limits.
 - The tweet is only a generic outage/status update with no limit reset, refill, restored allowance, compensation, or make-good meaning.
+- The reset already happened, the reset time is in the past relative to `run_time`, or a later item confirms completion; treat these as historical/no-action unless the same item also announces a new future reset.
 - The judgment relies on speculation outside the provided item text and metadata.
 
 ## Output expectation inside Codex Automation

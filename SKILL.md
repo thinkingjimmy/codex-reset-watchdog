@@ -29,10 +29,12 @@ DAYCLAW_SOURCE_ITEMS_URL=
 STATE_FILE_PATH=var/state.json
 INCLUDE_REPLIES=true
 REPORT_TIMEZONE=
+WATCHDOG_TEST_FIXTURE=
 ```
 
 When `DAYCLAW_SOURCE_ITEMS_URL` is blank, `scripts/check_once.mjs` derives `https://api.dayclaw.com/api/source/public/x/<TARGET_X_HANDLE>/items`.
 When `REPORT_TIMEZONE` is blank, reports use the Automation runtime/user timezone from `Intl.DateTimeFormat().resolvedOptions().timeZone`; set an IANA timezone only when the user wants an explicit override.
+Set `WATCHDOG_TEST_FIXTURE=future-reset` only for a one-off notification smoke test; it uses a synthetic future reset item, forces dry-run behavior, and must be blanked after the test.
 
 ## Core behavior
 
@@ -74,6 +76,7 @@ Use a persistent `STATE_FILE_PATH`. The default is `var/state.json` inside the p
 - `README.zh-CN.md`: Chinese usage tutorial with links.
 - `scripts/check_once.mjs`: zero-dependency Node Dayclaw public-source check; the recommended entrypoint for Codex Automation.
 - `scripts/self_test.mjs`: local deterministic tests with no network calls.
+- `scripts/test_fixture.mjs`: dynamic synthetic source used only for notification smoke tests.
 - `references/automation-prompt.md`: thin Codex Automation launcher prompt; durable processing rules live in this skill.
 - `references/llm-judge-rubric.md`: rubric for judging `review_items` inside Codex Automation.
 - `references/deployment.md`: setup and operating notes.
@@ -99,6 +102,7 @@ Every scheduled run should follow this protocol:
 9. Use `fetched_items` for context even when `review_items` is empty because the state was already primed. Do not create Triage findings from already-seen `fetched_items`; use them only to decide whether an already-seen future signal is still actionable or has become historical.
 10. Always end with a concise reset-focused Markdown report. The first visible line must be an emoji-led banner: `🚨 Actionable Codex reset ahead: <what>. Reset timing: <future time>.`, `⚠️ Possible future Codex reset needs review: <why>.`, or `✅ No actionable future Codex reset signal.`
 11. Do not read or write automation memory for routine runs. Write memory only for setup completion, configuration changes, positive reset findings, reportable operational errors, or explicit user-requested diagnostics.
+12. If JSON includes `notification_test=true`, treat the run as a smoke test: create only a clearly marked TEST Triage finding/report, never describe it as a real Dayclaw/X signal.
 
 Run reports should be short and reviewable:
 
@@ -148,6 +152,8 @@ Summarize setup in human language:
 - Automation cadence and command;
 - what the Codex Automations **Test** button should show.
 
+To test the notification path without waiting for a real reset, temporarily set `WATCHDOG_TEST_FIXTURE=future-reset` in the private `env` or `.env`, click the Automation **Test** button, verify that the report/finding is clearly marked TEST and shows a future reset, then remove or blank the variable.
+
 Do not paste the full JSON output unless debugging.
 
 When creating the Automation, inspect the current Automation tool schema or an existing Automation config before calling create/update. Current Codex versions may reject guessed parameters. If the schema exposes `rrule`, use `RRULE:FREQ=HOURLY;INTERVAL=1`; if it exposes `cwds`, pass the installed skill directory as a list. Do not invent `command` or `permissions` fields when the tool has none: the command is inside `references/automation-prompt.md`, and permissions come from `.codex/config.toml`. Include `model` and `reasoningEffort`/`reasoning` if the tool rejects the request without them, even if they appear optional. After creation, read the Automation back and verify cadence, working directory, active status, command/prompt behavior, and prompt.
@@ -166,6 +172,7 @@ DAYCLAW_SOURCE_ITEMS_URL=
 STATE_FILE_PATH=var/state.json
 INCLUDE_REPLIES=true
 REPORT_TIMEZONE=
+WATCHDOG_TEST_FIXTURE=
 ```
 
 ### 2. Confirm Codex permissions
@@ -210,7 +217,23 @@ node scripts/check_once.mjs --diagnose-network --json
 
 `dns.ok=false` or `http.reached=false` means the runtime cannot reach `api.dayclaw.com`; allow outbound HTTPS before debugging LLM behavior. Do not ask for full filesystem access merely to solve network reachability.
 
-### 6. Create a Codex Automation
+### 6. Smoke-test the notification path
+
+Use this only to test that the Automation can surface a reset notification before the next real reset:
+
+```env
+WATCHDOG_TEST_FIXTURE=future-reset
+```
+
+Then click the Automation **Test** button, or run:
+
+```bash
+node scripts/check_once.mjs --test-fixture future-reset --json
+```
+
+The run must include `notification_test=true`, `review_count=1`, and a clearly marked TEST future reset report/finding. Blank `WATCHDOG_TEST_FIXTURE` immediately after the smoke test.
+
+### 7. Create a Codex Automation
 
 Use the **full contents** of `references/automation-prompt.md` as the Automation prompt. Keep that prompt thin; this skill contains the processing rules. The default cadence is hourly because reset posts are usually advance notices rather than instant events.
 
@@ -248,7 +271,9 @@ Do not run `self_test`, `--prime-state`, or `--dry-run` during ordinary schedule
 - `api_warning`: present when the API succeeds but no item can be extracted.
 - `run_time`: current run time with UTC and local timezone fields; compare candidate reset timing against this before deciding whether a signal is still actionable.
 - `report_timezone`: Automation runtime/user timezone used for local display; overridden only by `REPORT_TIMEZONE`.
-- `fetch_strategy`: fixed to `dayclaw_public_items`.
+- `notification_test`: true only for synthetic notification smoke tests; any finding/report must be marked TEST.
+- `test_fixture`: fixture name such as `future-reset`, otherwise null.
+- `fetch_strategy`: `dayclaw_public_items` in production, `test_fixture` during notification smoke tests.
 - `state`: actual state file path, requested path, fallback status, and related warnings.
 - `llm_instruction`: short instruction for judging this batch.
 - `operational_error`: structured transient/runtime error data; report according to the Automation prompt.

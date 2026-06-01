@@ -2,6 +2,8 @@
 
 Use this rubric for every item in `review_items` emitted by `scripts/check_once.mjs`. The Node script has fetched the Dayclaw public source item and preserved available metadata; do not infer missing thread content.
 
+If the run JSON has `notification_test=true`, this is a synthetic smoke test. You may create a finding only if it is clearly labeled TEST; never present the fixture as a real Dayclaw/X signal.
+
 ## Promote to a Triage finding when
 
 The item probably means one of these:

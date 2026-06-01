@@ -45,6 +45,16 @@ You should see a new run under **Previous Runs**. Open it to inspect the details
 
 [previous runs screenshot](images/previous-runs.png)
 
+### Test Notifications
+
+You do not need to wait for the next real reset. Temporarily add this to your private `env` or `.env` file:
+
+```env
+WATCHDOG_TEST_FIXTURE=future-reset
+```
+
+Then click the Automation **Run Now/Test** button. The script emits a synthetic “reset tomorrow morning” item with `notification_test=true` and does not write to the real state file. The expected result is a report or Triage finding clearly labeled TEST with a future reset time. Remove or blank `WATCHDOG_TEST_FIXTURE` immediately after the smoke test.
+
 ## Want To Monitor More Sources?
 
 If you want to monitor sources beyond the `thsottiaux` account, such as other accounts, Reddit, or news feeds, you can register for [Dayclaw](https://dayclaw.com/).
@@ -91,4 +101,5 @@ codex-reset-watchdog/
   scripts/
     check_once.mjs                 # Zero-dependency Automation entrypoint
     self_test.mjs                  # Local deterministic self-test
+    test_fixture.mjs               # Dynamic fixture for notification smoke tests
 ```

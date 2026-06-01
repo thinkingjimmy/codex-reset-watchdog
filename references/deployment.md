@@ -18,6 +18,7 @@ The target account is already set:
 TARGET_X_HANDLE=thsottiaux
 DAYCLAW_SOURCE_ITEMS_URL=
 REPORT_TIMEZONE=
+WATCHDOG_TEST_FIXTURE=
 ```
 
 The full profile URL is `https://x.com/thsottiaux`. The default public source is `https://api.dayclaw.com/api/source/public/x/thsottiaux/items`.
@@ -124,6 +125,22 @@ A positive run should start with a high-signal banner:
 
 Routine no-op runs should not repeat the full fetched-items table, create Triage findings, external notifications, or routine automation memory. The concise report is safe for Automation run logs and Test results.
 
+## Notification smoke test
+
+Do not wait for a real reset to test the alert path. Temporarily set this in the private `env` or `.env` file:
+
+```env
+WATCHDOG_TEST_FIXTURE=future-reset
+```
+
+Then click the Automation **Test/Run Now** button, or run:
+
+```bash
+node scripts/check_once.mjs --test-fixture future-reset --json
+```
+
+The script emits a synthetic future reset item, sets `notification_test=true`, forces dry-run behavior, and avoids writing fake IDs into the real state file. The Automation report or Triage finding must be clearly marked TEST. Remove or blank `WATCHDOG_TEST_FIXTURE` immediately after the smoke test.
+
 ## Public source model
 
 Default scheduled monitoring uses the Dayclaw public source:
@@ -132,6 +149,7 @@ Default scheduled monitoring uses the Dayclaw public source:
 TARGET_X_HANDLE=thsottiaux
 DAYCLAW_SOURCE_ITEMS_URL=
 REPORT_TIMEZONE=
+WATCHDOG_TEST_FIXTURE=
 ```
 
 When the override is blank, the script derives:

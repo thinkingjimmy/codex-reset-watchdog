@@ -44,6 +44,16 @@ https://github.com/thinkingjimmy/codex-reset-watchdog
 
 [previous runs screenshot](images/previous-runs.png)
 
+### 测试通知能力
+
+不用等下一次真实 reset。临时在私有 `env` 或 `.env` 里加入：
+
+```env
+WATCHDOG_TEST_FIXTURE=future-reset
+```
+
+然后点击 Automation 的 Run Now/Test。脚本会生成一条“明天早上 reset”的合成测试项，`notification_test=true`，不会写入真实 state。预期结果是报告或 Triage finding 明确标成 TEST，并显示一个未来 reset 时间。测试完成后立刻把 `WATCHDOG_TEST_FIXTURE` 删掉或留空。
+
 ## 想要监控更多信息？
 
 如果你想要监控 thsottiaux 账号以外的信息，比如其他账号、Reddit、新闻源等，你可以注册 [Dayclaw](https://dayclaw.com/)。
@@ -88,4 +98,5 @@ codex-reset-watchdog/
   scripts/
     check_once.mjs                 # 零依赖 Automation 入口
     self_test.mjs                  # 本地确定性自测
+    test_fixture.mjs               # 通知烟测用的动态假数据
 ```

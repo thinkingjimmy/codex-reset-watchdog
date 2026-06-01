@@ -7,7 +7,7 @@
 
 ## 如何使用？
 
-### 复制黏贴 prompt
+### 第一步：复制黏贴 prompt，并安装 skill
 
 打开 Codex，点击 New Chats 按钮，新建一个 chat。然后直接复制黏贴以下这段 prompt。Codex 会自己安装本 skill、跑基础检查、初始化基线 state，并创建每小时运行的 Automation。
 
@@ -38,9 +38,13 @@ https://github.com/thinkingjimmy/codex-reset-watchdog
 不要贴原始 JSON，除非我明确要求。最终总结里不要叙述已经成功绕过的 schema 重试；只有创建最终失败或我要求 debug 时才提。不要开启 full access，除非窄网络权限路径不可用，并且你先解释取舍。
 ```
 
-### 测试 Automation
+### 第二步：测试并配置 Automation
 
-如果一切顺利，你可以点击 Codex 左导航的 Automations 标签，看到一个名为「Codex Reset Watchdog」的 Automation。点击它进入详情页，然后右上角的 Run Now 按钮。你应该会在 Previous Runs 看到一次新的运行记录，点开它可以看到运行的细节。Automation 的运行输出可能只留在 Automations 里，不一定出现在普通 chats；真正面向用户的提醒路径应由 Codex Automation 的通知配置承载。没有新信号时不应该创建 finding。如果你能看到 thsottiaux 最近的动态被正确解析，并且报告明确说明是否需要行动，那就说明基础流程是通的。
+如果一切顺利，你可以点击 Codex 左导航的 Automations 标签，看到一个名为「Codex Reset Watchdog」的 Automation。点击进入详情页：
+
+1. 点击右上角的 Run Now 按钮。
+2. 你应该会在 Previous Runs 看到一次新的运行记录，点开它可以看到运行的细节。
+3. Automation 的运行输出可能只留在 Automations 里，不一定出现在普通 chats。所以还需要设定一下 Project，将其设为 Chats。之后 Automation 输出的 finding 就会出现在 Chats 里，方便你平时查看。注意如果 thsottiaux 最近的动态被正确解析，并且报告里说是否需要行动了，说明基本流程是通的。
 
 [previous runs screenshot](images/previous-runs.png)
 

@@ -107,7 +107,8 @@ export class DedupeStore {
   constructor(filePath = process.env.STATE_FILE_PATH || DEFAULT_STATE_FILE_PATH) {
     this.requestedPath = filePath;
     this.path = normalizeStatePath(filePath);
-    this.fallbackPath = normalizeStatePath(DEFAULT_STATE_FILE_PATH);
+    const defaultFallback = normalizeStatePath(DEFAULT_STATE_FILE_PATH);
+    this.fallbackPath = this.path === defaultFallback ? path.join(os.tmpdir(), "codex-reset-watchdog-state.json") : defaultFallback;
     this.fallbackUsed = false;
     this.warnings = [];
   }
@@ -618,6 +619,9 @@ function transientNetworkSummary(error, store, args) {
     review_count: 0,
     has_review_items: false,
     review_items: [],
+    report_timezone: reportTimezone(),
+    run_time: timestampFields(new Date().toISOString()),
+    llm_instruction: OPERATIONAL_LLM_INSTRUCTION,
     notification_surface: "codex_automation_triage",
     dry_run: Boolean(args.dryRun),
     state: store.info(),
@@ -651,6 +655,9 @@ function runtimeErrorSummary(error, args, store = null) {
     review_count: 0,
     has_review_items: false,
     review_items: [],
+    report_timezone: reportTimezone(),
+    run_time: timestampFields(new Date().toISOString()),
+    llm_instruction: OPERATIONAL_LLM_INSTRUCTION,
     notification_surface: "codex_automation_triage",
     dry_run: Boolean(args.dryRun),
     state: store?.info?.() || null,
@@ -667,6 +674,7 @@ function emptyFetchWarning(apiPages) {
   if (!apiPages.length) return "Dayclaw public source returned no pages; check source URL.";
   return "Dayclaw public source succeeded but no items were extracted. Inspect api_pages.response_keys and endpoint.";
 }
+const OPERATIONAL_LLM_INSTRUCTION = "This is a watchdog operational/source error, not a Codex reset signal. Never label it as a possible future Codex reset. If report_to_triage=true, report an operational issue such as ⚠️ Watchdog source unreachable or ⚠️ Watchdog runtime error; otherwise return a compact operational no-action summary. Do not output process narration.";
 
 export async function main() {
   loadRuntimeEnvironment();

@@ -122,6 +122,12 @@ A positive run should start with a high-signal banner:
 🚨 Actionable Codex reset ahead: limits will reset tomorrow morning. Reset timing: 2026-06-01 morning (from "tomorrow morning"; report timezone: user's local timezone).
 ```
 
+Operational failures are not reset signals. A source or runtime failure should start with an operational banner such as:
+
+```text
+⚠️ Watchdog source unreachable: api.dayclaw.com DNS/HTTPS failed; no reset judgment was made.
+```
+
 Routine no-op runs should not repeat the full fetched-items table, create Triage findings, send external notifications, or write routine automation memory. The concise report is safe for Automation run logs and Test/Run Now results. Test/Run Now is only an immediate run of the same Automation prompt; it is not a special mode and cannot pass per-run parameters.
 
 ## Public source model
@@ -184,7 +190,7 @@ Use the default persistent state file path:
 STATE_FILE_PATH=var/state.json
 ```
 
-`var/` is ignored by git and writable in Codex sandboxed runs. If the file is deleted, the script loses dedupe memory and may reprocess old items. If you set a custom home-directory path and Codex cannot write it, the script falls back to `var/state.json` and reports that in the `state` field.
+`var/` is ignored by git and writable in Codex sandboxed runs. If the file is deleted, the script loses dedupe memory and may reprocess old items. If you set a custom home-directory path and Codex cannot write it, the script falls back to `var/state.json`; if the installed project directory itself is read-only, it falls back to an OS temp state file and reports that in the `state` field.
 
 Leave `REPORT_TIMEZONE` blank to use the Automation runtime/user timezone. Set it only when the user explicitly wants a fixed IANA timezone such as `America/Los_Angeles`.
 

@@ -62,7 +62,7 @@ This means:
 - the 10:30 run ignores the same item as already seen;
 - if a genuinely new reset announcement appears later with a new ID, it is eligible for a new LLM review and finding.
 
-Use a persistent `STATE_FILE_PATH`. The default is `var/state.json` inside the project because Codex sandboxed runs can write there and `var/` is git-ignored. If a user-configured home-directory state path is not writable, the script falls back to `var/state.json` and reports that in the output `state` field.
+Use a persistent `STATE_FILE_PATH`. The default is `var/state.json` inside the project because Codex sandboxed runs can write there and `var/` is git-ignored. If a user-configured home-directory state path is not writable, the script falls back to `var/state.json`; if the installed project directory itself is read-only, it falls back to an OS temp state file and reports that in the output `state` field.
 
 ## Files in this skill
 
@@ -97,7 +97,7 @@ Every scheduled run should follow this protocol:
 7. If `api_warning` is present, create one operational finding with `source_url`, `fetched`, `api_warning`, and `api_pages`.
 8. If `review_items` is non-empty, judge every item with `references/llm-judge-rubric.md`. Create a Triage finding only for new items that probably announce or schedule an actionable future Codex usage/quota/rate-limit reset, refill, restored allowance, or make-good.
 9. Use `fetched_items` for context even when `review_items` is empty because the state was already primed. Do not create Triage findings from already-seen `fetched_items`; use them only to decide whether an already-seen future signal is still actionable or has become historical.
-10. Always end with a concise reset-focused Markdown report. The first visible line must be an emoji-led banner: `🚨 Actionable Codex reset ahead: <what>. Reset timing: <future time>.`, `⚠️ Possible future Codex reset needs review: <why>.`, or `✅ No actionable future Codex reset signal.`
+10. Always end with a concise Markdown report. For reset judgments, the first visible line must be one of: `🚨 Actionable Codex reset ahead: <what>. Reset timing: <future time>.`, `⚠️ Possible future Codex reset needs review: <why>.`, or `✅ No actionable future Codex reset signal.` For `transient_network_error`, `network_diagnostic`, or `error`, use an operational banner such as `⚠️ Watchdog source unreachable` or `⚠️ Watchdog runtime error`; never call source/network/state failures a possible Codex reset.
 11. Do not read or write automation memory for routine runs. Write memory only for setup completion, configuration changes, positive reset findings, reportable operational errors, or explicit user-requested diagnostics.
 
 Run reports should be short and reviewable:
@@ -113,6 +113,7 @@ Run reports should be short and reviewable:
 - include `new_items` / `review_count` and whether a Triage finding was created;
 - mention source health only when useful;
 - avoid process narration such as checking memory, waiting for commands, choosing paths, writing memory, or restating every command.
+- do not emit progress updates while the command is running; final run output should carry the result.
 
 The Automation Test/Run Now button is just an immediate run of the same Automation prompt. It cannot be used as a special mode and cannot pass one-off arguments. The Automation prompt cannot reliably know whether a run came from the button or the schedule, so use the same reset-focused report for both.
 

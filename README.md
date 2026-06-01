@@ -11,39 +11,32 @@ This skill monitors public X posts from Codex lead `thsottiaux`, detects future-
 Open Codex, click **New Chats**, start a new chat, then paste the prompt below. Codex will install this skill, run the basic checks, prime baseline state, and create an hourly Automation.
 
 ```text
-Install and set up the codex-reset-watchdog skill from GitHub:
+Quietly complete installation and Automation setup for codex-reset-watchdog:
 https://github.com/thinkingjimmy/codex-reset-watchdog
 
-Use Codex's skill installation workflow if available. If no installer is available, clone this repo and use that directory as the Automation working directory.
+Only message me mid-run if you need my approval or hit a blocker that I must resolve.
+Otherwise, do not output progress narration, tool parameter details, command attempts, retry details, raw JSON, or state file contents. Complete the tasks below yourself, then give only a concise setup summary.
 
-After installation:
-1. Find the skill directory that contains SKILL.md and scripts/check_once.mjs.
-2. Run node scripts/self_test.mjs.
-3. Run node scripts/check_once.mjs --prime-state --json to create the baseline state.
-4. Run node scripts/check_once.mjs --dry-run --json once to confirm the Dayclaw public source, JSON parsing, and state dedupe.
-5. Create an hourly Codex Automation:
-   - working directory/cwds: the installed codex-reset-watchdog directory
-   - prompt: use the full contents of references/automation-prompt.md exactly; it is only a thin launcher that tells Automation to use the skill
-   - permissions: if the Automation tool has no permissions field, rely on the installed directory's .codex/config.toml profile codex-reset-watchdog-net
-6. When calling the Codex Automation creation tool, do not guess its parameter shape:
-   - inspect the tool schema or an existing Automation config first;
-   - use the hourly schedule format accepted by the current tool; if the schema shows `rrule`, prefer `RRULE:FREQ=HOURLY;INTERVAL=1`;
-   - pass the working directory as `cwd` or `cwds` exactly as the current tool expects; do not guess string vs array;
-   - if the schema has no `command` or `permissions` fields, do not invent them; the command lives in the thin prompt, and permissions come from `.codex/config.toml`;
-   - if the current tool actually requires `model` and `reasoningEffort`/`reasoning`, include them even if the schema marks them optional;
-   - after creation, read the Automation back and confirm cadence, working directory, active status, command, and prompt were not rewritten by the tool layer.
-7. Give me a concise setup summary: success/failure, Automation cadence, working directory, state path, and what I should see when I click Codex Test/Run Now. Note that Test/Run Now immediately runs the same Automation prompt; it is not a special test mode and cannot pass one-off parameters for that run.
-
-Do not paste raw JSON unless I explicitly ask. In the final summary, do not narrate schema retries that were already successfully resolved; mention them only if creation ultimately fails or I ask for debugging. Do not enable full access unless the narrow network permission path is unavailable and you explain the tradeoff first.
+Tasks:
+1. Prefer Codex's skill installation workflow for this GitHub repo, using the skill name codex-reset-watchdog. If no installer is available, clone the repo and use that directory as the Automation working directory.
+2. Find the directory containing SKILL.md, scripts/check_once.mjs, references/automation-prompt.md, and .codex/config.toml.
+3. In that directory, run node scripts/self_test.mjs.
+4. Run node scripts/check_once.mjs --prime-state --json to create the baseline state.
+5. Run node scripts/check_once.mjs --dry-run --json to confirm the Dayclaw public source, JSON parsing, and state dedupe.
+6. If node scripts/check_once.mjs fails because of sandbox/network permissions, request permission only for the narrow node scripts/check_once.mjs entrypoint and rerun; do not request full access. If DNS/HTTPS or state writes still fail, summarize them as operational issues, not as reset/no-reset conclusions.
+7. Create or update an hourly standalone/project Automation named Codex Reset Watchdog, meaning an independent cron Automation that reports findings to Triage; do not create a thread/heartbeat Automation attached to the current chat. The working directory is the installed directory, the prompt is the full contents of references/automation-prompt.md, and permissions come from .codex/config.toml. If an Automation with the same name already exists, update it instead of creating a duplicate.
+8. After creation, only confirm the Automation is active, hourly, uses the right working directory, and uses the right prompt source; do not read the raw state file and do not write automation memory.
+9. Final summary only: install directory, self-test, prime/dry-run status, state.path, source health, Automation ID/status/cadence/working directory, and Run Now/Test expectation.
 ```
 
 ### Step 2: Test And Configure The Automation
 
-If everything works, click **Automations** in the Codex left navigation. You should see an Automation named **Codex Reset Watchdog**. Open its detail page:
+If everything works, click **Automations** in the Codex left navigation. You should see a standalone/project Automation named **Codex Reset Watchdog**. Open its detail page:
 
-1. Click **Run Now** in the top right.
-2. You should see a new run under **Previous Runs**. Open it to inspect the details.
-3. Automation output may stay inside Automations instead of appearing in normal chats. You also need to set the Automation **Project** to **Chats**. After that, findings produced by the Automation will appear in Chats, making them easier to review day to day. If recent `thsottiaux` posts are parsed correctly and the report says whether action is needed, the basic workflow is working.
+1. Confirm the Automation working directory/cwds points at the installed skill directory, the one containing `SKILL.md`, `scripts/check_once.mjs`, and `.codex/config.toml`.
+2. Click **Run Now** in the top right. Do not test by pasting the Automation prompt into a normal Chat/Agent run; a normal Chat may run outside the skill directory and will not inherit this Automation's working directory or `.codex/config.toml` permissions, which can cause `api.dayclaw.com` DNS/HTTPS failures or `var/state.json` write failures.
+3. You should see a new run under **Previous Runs**. Open it to inspect the details.
+4. Standalone/project Automation findings appear as separate automation runs in Triage. Routine run output may stay inside Automations/Previous Runs instead of appearing in normal chats; if the UI exposes a Project/Chats display setting, it only changes where findings appear and does not change the runtime directory. If recent `thsottiaux` posts are parsed correctly and the report says whether action is needed, the basic workflow is working.
 
 [previous runs screenshot](images/previous-runs.png)
 

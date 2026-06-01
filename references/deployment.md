@@ -10,7 +10,9 @@ The intended user flow is one copied prompt from `README.md` / `README.zh-CN.md`
 https://github.com/thinkingjimmy/codex-reset-watchdog
 ```
 
-Then Codex should run setup checks, prime state, create an hourly Automation, and summarize the result in human language. Users only need a local `env` or `.env` file when they want to override defaults.
+Then Codex should run setup checks, prime state, create an hourly standalone/project Automation, and summarize the result in human language. Users only need a local `env` or `.env` file when they want to override defaults.
+
+The README prompt is intentionally quiet. Apply the compatibility notes in this document silently, and send intermediate user messages only for approval requests or real blockers. Do not turn schema probing, command retries, raw JSON, or state-file inspection into the setup story.
 
 The target account is already set:
 
@@ -79,7 +81,7 @@ Use the project-level `.codex/config.toml` profile `codex-reset-watchdog-net`. T
 
 If the Codex UI only lets local shell commands reach the network after enabling full access, treat that as a runtime permission limitation. The project itself still only needs workspace write plus network egress, so full access should be a temporary fallback rather than the recommended setup.
 
-Codex Automation should run hourly:
+Codex Automation should run hourly as a standalone/project cron Automation:
 
 ```bash
 node scripts/check_once.mjs --json
@@ -91,12 +93,13 @@ Setup-only commands are `node scripts/self_test.mjs`, `node scripts/check_once.m
 
 ## Automation creation compatibility
 
-Do not guess the Codex Automation tool's parameter shape. Before creating or updating the Automation, inspect the current tool schema or read an existing Automation config from the same Codex version.
+Do not guess the Codex Automation tool's parameter shape. Before creating or updating the Automation, inspect the current tool schema or read an existing Automation config from the same Codex version. Use the standalone/project cron path for this watchdog, not a thread/heartbeat path.
 
 Known pitfalls:
 
 - Some versions reject plain cadence strings; use the tool's accepted hourly format, preferably iCalendar `DTSTART` plus `RRULE:FREQ=HOURLY;INTERVAL=1`.
 - Some versions distinguish `cwd` string from `cwds` list; pass exactly what the current schema accepts.
+- Some schemas call detached jobs `kind=cron`, `standalone`, or project automations. Choose the detached workspace job, not a thread/heartbeat automation.
 - Some schemas expose `rrule` and `cwds`, but no `command` or `permissions`; in that case, keep the command in the thin Automation prompt and rely on `.codex/config.toml` for permissions.
 - Some versions require `model` and `reasoningEffort`/`reasoning` during cron creation even when the schema marks them optional.
 - Prompt length is not the first suspect; validate schedule/model/cwd shape before shortening the prompt.
@@ -104,9 +107,11 @@ Known pitfalls:
 
 If Automation creation succeeds after one or more parameter retries, do not surface the retry story in the final setup summary. Report it only when creation fails or the user asks for debug details.
 
+These compatibility notes are maintainer instructions, not user-facing output. A successful setup summary should stay compact: install directory, checks, state path, source health, Automation ID/status/cadence/working directory, and Test/Run Now expectation.
+
 ## Run summary behavior
 
-Codex Automation run output lives in Automations/Previous Runs; do not assume routine results appear as chat notifications. User-facing delivery should come from Codex Automation notification settings outside this skill. This skill should create a finding only for a new future reset signal.
+Standalone/project Codex Automation findings appear as separate automation runs in Triage. Routine output can still live in Automations/Previous Runs; do not assume every run appears as a chat notification. This skill should create a finding only for a new future reset signal.
 
 A healthy no-op run after priming should say:
 
@@ -129,6 +134,8 @@ Operational failures are not reset signals. A source or runtime failure should s
 ```
 
 Routine no-op runs should not repeat the full fetched-items table, create Triage findings, send external notifications, or write routine automation memory. The concise report is safe for Automation run logs and Test/Run Now results. Test/Run Now is only an immediate run of the same Automation prompt; it is not a special mode and cannot pass per-run parameters.
+
+Do not validate the Automation by pasting its prompt into a normal Chat/Agent session. A normal chat may run outside the installed skill directory and therefore miss both the Automation `cwds` and the `.codex/config.toml` permission profile. The usual symptom is a combined false operational failure: `api.dayclaw.com` DNS/HTTPS blocked and `var/state.json` not writable. Validate with the Automation detail page's Run Now button, and make sure `cwds` points at the installed skill directory.
 
 ## Public source model
 

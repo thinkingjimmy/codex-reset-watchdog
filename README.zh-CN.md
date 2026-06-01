@@ -12,39 +12,32 @@
 打开 Codex，点击 New Chats 按钮，新建一个 chat。然后直接复制黏贴以下这段 prompt。Codex 会自己安装本 skill、跑基础检查、初始化基线 state，并创建每小时运行的 Automation。
 
 ```text
-请从 GitHub 安装并设置 codex-reset-watchdog skill：
+请静默完成 codex-reset-watchdog 的安装与 Automation 设置：
 https://github.com/thinkingjimmy/codex-reset-watchdog
 
-优先使用 Codex 的 skill installation workflow。如果没有可用 installer，就 clone 这个 repo，并把该目录作为 Automation working directory。
+只在两种情况中途回复我：需要我授权某个操作，或遇到必须由我处理的阻塞。
+除此之外，不要输出过程进度、工具参数细节、命令尝试、重试过程、原始 JSON 或 state 文件内容。请自己完成下面任务，最后只给一段简洁 setup 总结。
 
-安装后：
-1. 找到包含 SKILL.md 和 scripts/check_once.mjs 的 skill 目录。
-2. 运行 node scripts/self_test.mjs。
-3. 运行 node scripts/check_once.mjs --prime-state --json 创建基线 state。
-4. 运行 node scripts/check_once.mjs --dry-run --json 一次，确认 Dayclaw public source、JSON 解析和 state 去重正常。
-5. 创建一个每小时运行的 Codex Automation：
-   - working directory/cwds：已安装的 codex-reset-watchdog 目录
-   - prompt：完整使用 references/automation-prompt.md，不要自由改写；它只是让 Automation 使用 skill 的薄启动器
-   - permissions：如果 Automation tool 没有 permissions 字段，就依赖安装目录里的 .codex/config.toml profile codex-reset-watchdog-net
-6. 调用 Codex Automation 创建工具时，不要猜参数形态：
-   - 先查看工具 schema 或现有 Automation config；
-   - 使用当前工具接受的 hourly schedule 格式；如果 schema 显示 `rrule`，优先用 `RRULE:FREQ=HOURLY;INTERVAL=1`；
-   - working directory 按当前工具要求传 `cwd` 或 `cwds`，不要猜数组/字符串；
-   - 如果 schema 没有 `command` 或 `permissions` 字段，不要硬造字段；命令写在 thin prompt 里，权限来自 `.codex/config.toml`；
-   - 如果当前工具实际要求 `model` 和 `reasoningEffort`/`reasoning`，即使 schema 标成 optional 也要补上；
-   - 创建后读回 Automation，确认频率、working directory、active 状态、command 和 prompt 没有被工具层改写。
-7. 最后给我一个简洁 setup 总结：成功/失败、Automation 频率、working directory、state 路径，以及我点击 Codex Test/Run Now 时应该看到什么。注意 Test/Run Now 只是马上运行同一份 Automation prompt，不是特殊测试模式，也不能为这一次运行单独传参数。
-
-不要贴原始 JSON，除非我明确要求。最终总结里不要叙述已经成功绕过的 schema 重试；只有创建最终失败或我要求 debug 时才提。不要开启 full access，除非窄网络权限路径不可用，并且你先解释取舍。
+任务：
+1. 优先使用 Codex 的 skill installation workflow 安装这个 GitHub repo，skill 名称用 codex-reset-watchdog。没有 installer 时再 clone repo，并把该目录作为 Automation working directory。
+2. 找到包含 SKILL.md、scripts/check_once.mjs、references/automation-prompt.md、.codex/config.toml 的目录。
+3. 在该目录运行 node scripts/self_test.mjs。
+4. 运行 node scripts/check_once.mjs --prime-state --json 创建基线 state。
+5. 运行 node scripts/check_once.mjs --dry-run --json 确认 Dayclaw public source、JSON 解析和 state 去重正常。
+6. 如果 node scripts/check_once.mjs 因 sandbox/network 权限失败，只请求允许 node scripts/check_once.mjs 这个窄入口重跑；不要请求 full access。若仍是 DNS/HTTPS 或 state 写入问题，按运行级问题总结，不要当成 reset/no-reset 结论。
+7. 创建或更新名为 Codex Reset Watchdog 的每小时 standalone/project Automation，也就是独立运行并把 finding 报到 Triage 的 cron Automation；不要创建附着在当前 chat 上的 thread/heartbeat Automation。工作目录是安装目录，prompt 完整使用 references/automation-prompt.md，权限依赖 .codex/config.toml。如果已经存在同名 Automation，更新它，不要创建重复项。
+8. 创建后只确认 Automation 是否 active、hourly、工作目录正确、prompt 来源正确；不要读取 state 文件原文，不要写 automation memory。
+9. 最终总结只包含：安装目录、self-test、prime/dry-run 状态、state.path、source health、Automation ID/状态/频率/工作目录，以及 Run Now/Test 预期。
 ```
 
 ### 第二步：测试并配置 Automation
 
-如果一切顺利，你可以点击 Codex 左导航的 Automations 标签，看到一个名为「Codex Reset Watchdog」的 Automation。点击进入详情页：
+如果一切顺利，你可以点击 Codex 左导航的 Automations 标签，看到一个名为「Codex Reset Watchdog」的 standalone/project Automation。点击进入详情页：
 
-1. 点击右上角的 Run Now 按钮。
-2. 你应该会在 Previous Runs 看到一次新的运行记录，点开它可以看到运行的细节。
-3. Automation 的运行输出可能只留在 Automations 里，不一定出现在普通 chats。所以还需要设定一下 Project，将其设为 Chats。之后 Automation 输出的 finding 就会出现在 Chats 里，方便你平时查看。注意如果 thsottiaux 最近的动态被正确解析，并且报告里说是否需要行动了，说明基本流程是通的。
+1. 确认 Automation 的 working directory/cwds 指向已安装的 skill 目录，也就是包含 `SKILL.md`、`scripts/check_once.mjs`、`.codex/config.toml` 的目录。
+2. 点击右上角的 Run Now 按钮。不要把 Automation prompt 复制到普通 Chat/Agent 里当测试；普通 Chat 可能不在 skill 目录运行，也不会继承这个 Automation 的 working directory 和 `.codex/config.toml` 权限，容易出现 `api.dayclaw.com` DNS/HTTPS 失败或 `var/state.json` 无法写入。
+3. 你应该会在 Previous Runs 看到一次新的运行记录，点开它可以看到运行的细节。
+4. Standalone/project Automation 的 finding 会作为独立 automation run 进入 Triage。Automation 的普通运行输出可能只留在 Automations/Previous Runs 里，不一定出现在普通 chats；如果 UI 里有 Project/Chats 这类显示位置设置，它只影响 finding 显示在哪里，不会改变运行目录。注意如果 thsottiaux 最近的动态被正确解析，并且报告里说是否需要行动了，说明基本流程是通的。
 
 [previous runs screenshot](images/previous-runs.png)
 

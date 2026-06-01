@@ -10,9 +10,9 @@ The intended user flow is one copied prompt from `README.md` / `README.zh-CN.md`
 https://github.com/thinkingjimmy/codex-reset-watchdog
 ```
 
-Then Codex should run setup checks, prime state, create an hourly standalone/project Automation, and summarize the result in human language. Users only need a local `env` or `.env` file when they want to override defaults.
+Then Codex should run setup checks, prime state, and summarize the installed directory in human language. The user manually creates the hourly cron/project Automation in the Codex UI by copying the README Automation prompt. Users only need a local `env` or `.env` file when they want to override defaults.
 
-The README prompt is intentionally quiet. Apply the compatibility notes in this document silently, and send intermediate user messages only for approval requests or real blockers. Do not turn schema probing, command retries, raw JSON, or state-file inspection into the setup story.
+The README install prompt is intentionally quiet. Apply the setup notes in this document silently, and send intermediate user messages only for approval requests or real blockers. Do not turn command retries, raw JSON, or state-file inspection into the setup story.
 
 The target account is already set:
 
@@ -81,37 +81,36 @@ Use the project-level `.codex/config.toml` profile `codex-reset-watchdog-net`. T
 
 If the Codex UI only lets local shell commands reach the network after enabling full access, treat that as a runtime permission limitation. The project itself still only needs workspace write plus network egress, so full access should be a temporary fallback rather than the recommended setup.
 
-Codex Automation should run hourly as a standalone/project cron Automation:
+After install initialization succeeds, the user should manually create a cron/project Automation that runs hourly:
 
 ```bash
 node scripts/check_once.mjs --json
 ```
 
-Use the full contents of `references/automation-prompt.md` as the Automation prompt. It is intentionally thin and delegates behavior to `SKILL.md`; do not copy the full run protocol into the Automation prompt.
+Use the full contents of `references/automation-prompt.md` as the Automation prompt. The same prompt is embedded in the README for copying. It is intentionally thin and delegates behavior to `SKILL.md`; do not copy the full run protocol into the Automation prompt.
 
 Setup-only commands are `node scripts/self_test.mjs`, `node scripts/check_once.mjs --prime-state --json`, and `node scripts/check_once.mjs --dry-run --json`. Do not run them on every schedule.
 
-## Automation creation compatibility
+## Manual Automation creation notes
 
-Do not guess the Codex Automation tool's parameter shape. Before creating or updating the Automation, inspect the current tool schema or read an existing Automation config from the same Codex version. Use the standalone/project cron path for this watchdog, not a thread/heartbeat path.
+Do not ask the install prompt to create or update Automations. Codex Automation UI and schemas move faster than docs, so the user should create the scheduled job manually in the UI. Use the cron/project path for this watchdog, not a thread/heartbeat path.
 
-Known pitfalls:
+Minimum fields to communicate:
 
-- Some versions reject plain cadence strings; use the tool's accepted hourly format, preferably iCalendar `DTSTART` plus `RRULE:FREQ=HOURLY;INTERVAL=1`.
-- Some versions distinguish `cwd` string from `cwds` list; pass exactly what the current schema accepts.
-- Some schemas call detached jobs `kind=cron`, `standalone`, or project automations. Choose the detached workspace job, not a thread/heartbeat automation.
-- Some schemas expose `rrule` and `cwds`, but no `command` or `permissions`; in that case, keep the command in the thin Automation prompt and rely on `.codex/config.toml` for permissions.
-- Some versions require `model` and `reasoningEffort`/`reasoning` during cron creation even when the schema marks them optional.
-- Prompt length is not the first suspect; validate schedule/model/cwd shape before shortening the prompt.
-- After creation, read the Automation back and confirm active status, cadence, working directory, command, and prompt.
+- Name: `Codex Reset Watchdog`.
+- Cadence: hourly.
+- Type: cron/project scheduled job, not thread/heartbeat.
+- Working directory/cwds: the installed skill directory that contains `SKILL.md`, `scripts/check_once.mjs`, and `.codex/config.toml`.
+- Prompt: the exact README Automation prompt, which must match `references/automation-prompt.md`.
+- Permissions: rely on `.codex/config.toml` and the narrow `codex-reset-watchdog-net` profile.
 
-If Automation creation succeeds after one or more parameter retries, do not surface the retry story in the final setup summary. Report it only when creation fails or the user asks for debug details.
+If the product UI asks for details such as `kind=cron`, local/worktree execution, model, reasoning effort, or a schedule format, the user should follow the current UI labels. Do not encode those volatile UI details into the install prompt.
 
-These compatibility notes are maintainer instructions, not user-facing output. A successful setup summary should stay compact: install directory, checks, state path, source health, Automation ID/status/cadence/working directory, and Test/Run Now expectation.
+README and `references/automation-prompt.md` must stay in sync. When the Automation prompt changes, update both copies in the same commit.
 
 ## Run summary behavior
 
-Standalone/project Codex Automation findings appear as separate automation runs in Triage. Routine output can still live in Automations/Previous Runs; do not assume every run appears as a chat notification. This skill should create a finding only for a new future reset signal.
+Cron/project Codex Automation findings appear as separate automation runs in Triage. Routine output can still live in Automations/Previous Runs; do not assume every run appears as a chat notification. This skill should create a finding only for a new future reset signal.
 
 A healthy no-op run after priming should say:
 

@@ -7,37 +7,57 @@
 
 ## 如何使用？
 
-### 第一步：复制黏贴 prompt，并安装 skill
+### 第一步：复制 prompt，安装并初始化 skill
 
-打开 Codex，点击 New Chats 按钮，新建一个 chat。然后直接复制黏贴以下这段 prompt。Codex 会自己安装本 skill、跑基础检查、初始化基线 state，并创建每小时运行的 Automation。
+打开 Codex，点击 New Chats 按钮，新建一个 chat。然后直接复制黏贴以下这段 prompt。Codex 会自己安装本 skill、跑基础检查、初始化基线 state，但不会创建 Automation。
 
 ```text
-请静默完成 codex-reset-watchdog 的安装与 Automation 设置：
+请静默安装并初始化 codex-reset-watchdog skill：
 https://github.com/thinkingjimmy/codex-reset-watchdog
 
 只在两种情况中途回复我：需要我授权某个操作，或遇到必须由我处理的阻塞。
 除此之外，不要输出过程进度、工具参数细节、命令尝试、重试过程、原始 JSON 或 state 文件内容。请自己完成下面任务，最后只给一段简洁 setup 总结。
 
 任务：
-1. 优先使用 Codex 的 skill installation workflow 安装这个 GitHub repo，skill 名称用 codex-reset-watchdog。没有 installer 时再 clone repo，并把该目录作为 Automation working directory。
+1. 优先使用 Codex 的 skill installation workflow 安装这个 GitHub repo，skill 名称用 codex-reset-watchdog。没有 installer 时再 clone repo，并把该目录作为后续 Automation working directory。
 2. 找到包含 SKILL.md、scripts/check_once.mjs、references/automation-prompt.md、.codex/config.toml 的目录。
 3. 在该目录运行 node scripts/self_test.mjs。
 4. 运行 node scripts/check_once.mjs --prime-state --json 创建基线 state。
 5. 运行 node scripts/check_once.mjs --dry-run --json 确认 Dayclaw public source、JSON 解析和 state 去重正常。
 6. 如果 node scripts/check_once.mjs 因 sandbox/network 权限失败，只请求允许 node scripts/check_once.mjs 这个窄入口重跑；不要请求 full access。若仍是 DNS/HTTPS 或 state 写入问题，按运行级问题总结，不要当成 reset/no-reset 结论。
-7. 创建或更新名为 Codex Reset Watchdog 的每小时 standalone/project Automation，也就是独立运行并把 finding 报到 Triage 的 cron Automation；不要创建附着在当前 chat 上的 thread/heartbeat Automation。工作目录是安装目录，prompt 完整使用 references/automation-prompt.md，权限依赖 .codex/config.toml。如果已经存在同名 Automation，更新它，不要创建重复项。
-8. 创建后只确认 Automation 是否 active、hourly、工作目录正确、prompt 来源正确；不要读取 state 文件原文，不要写 automation memory。
-9. 最终总结只包含：安装目录、self-test、prime/dry-run 状态、state.path、source health、Automation ID/状态/频率/工作目录，以及 Run Now/Test 预期。
+7. 不要创建、更新或测试 Automation；我会在下一步手动创建。
+8. 最终总结只包含：安装目录、self-test、prime/dry-run 状态、state.path、source health，以及下一步应使用的 Automation working directory。不要贴原始 JSON。
 ```
 
-### 第二步：测试并配置 Automation
+### 第二步：手动创建 Automation
 
-如果一切顺利，你可以点击 Codex 左导航的 Automations 标签，看到一个名为「Codex Reset Watchdog」的 standalone/project Automation。点击进入详情页：
+在 Codex UI 里手动创建一个新的 cron/project Automation。不同版本 UI 的字段名可能会变，按下面这些含义填写即可：
 
-1. 确认 Automation 的 working directory/cwds 指向已安装的 skill 目录，也就是包含 `SKILL.md`、`scripts/check_once.mjs`、`.codex/config.toml` 的目录。
-2. 点击右上角的 Run Now 按钮。不要把 Automation prompt 复制到普通 Chat/Agent 里当测试；普通 Chat 可能不在 skill 目录运行，也不会继承这个 Automation 的 working directory 和 `.codex/config.toml` 权限，容易出现 `api.dayclaw.com` DNS/HTTPS 失败或 `var/state.json` 无法写入。
-3. 你应该会在 Previous Runs 看到一次新的运行记录，点开它可以看到运行的细节。
-4. Standalone/project Automation 的 finding 会作为独立 automation run 进入 Triage。Automation 的普通运行输出可能只留在 Automations/Previous Runs 里，不一定出现在普通 chats；如果 UI 里有 Project/Chats 这类显示位置设置，它只影响 finding 显示在哪里，不会改变运行目录。注意如果 thsottiaux 最近的动态被正确解析，并且报告里说是否需要行动了，说明基本流程是通的。
+1. 名称：`Codex Reset Watchdog`
+2. 频率：每小时一次。
+3. 类型：cron/project scheduled job；不要创建附着在当前 chat 上的 thread/heartbeat Automation。
+4. Working directory/cwds：第一步总结里的 skill 安装目录，也就是包含 `SKILL.md`、`scripts/check_once.mjs`、`.codex/config.toml` 的目录。
+5. Prompt：复制下面整段内容。
+6. 权限：使用该目录里的 `.codex/config.toml`，它只允许写当前 workspace 并访问 `api.dayclaw.com`。
+
+```text
+Use the $codex-reset-watchdog skill.
+
+Run from the installed codex-reset-watchdog working directory:
+
+Command:
+node scripts/check_once.mjs --json
+
+Follow the skill's Automation run protocol. Return an emoji-led actionable/no-action report. Alert only for future actionable resets; treat completed or past reset posts as historical context.
+
+Do not emit progress narration while running. Do not inspect or update automation memory during routine runs. If the initial working directory does not contain `scripts/check_once.mjs`, silently switch to the configured Automation working directory that does.
+
+If JSON status is `transient_network_error`, `network_diagnostic`, or `error`, treat it as a watchdog operational issue, not a possible Codex reset. Never use the reset banners for source/network/state failures.
+
+Omit the full repeated table on routine `new_items=0` runs when no future actionable or unclear signal remains. Do not output raw JSON, process narration, or routine memory notes.
+```
+
+创建完成后，在 Automation 详情页点击 Run Now 测试。不要把这段 Automation prompt 复制到普通 Chat/Agent 里当测试；普通 Chat 可能不在 skill 目录运行，也不会继承这个 Automation 的 working directory 和 `.codex/config.toml` 权限，容易出现 `api.dayclaw.com` DNS/HTTPS 失败或 `var/state.json` 无法写入。Cron/project Automation 的 finding 会作为独立 automation run 进入 Triage；普通运行输出可能只留在 Automations/Previous Runs 里。
 
 [previous runs screenshot](images/previous-runs.png)
 

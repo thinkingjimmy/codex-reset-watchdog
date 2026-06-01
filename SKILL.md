@@ -7,7 +7,7 @@ description: Set up a Codex Automation-only, LLM-first check for pre-announcemen
 
 Use this skill to implement or maintain a **Codex Automation-only** Dayclaw public-source check. The default target is `@thsottiaux` (`https://x.com/thsottiaux`) via `https://api.dayclaw.com/api/source/public/x/thsottiaux/items`. The skill reports a Codex Automation finding when the Automation LLM judges that an item likely announces, confirms, schedules, completes, or remediates a Codex usage/quota/rate-limit reset, quota refill, restored allowance, or related make-good.
 
-This skill intentionally does **not** send Telegram, Discord, Slack, ntfy, email, or generic webhook messages. The notification surface is Codex itself: `scripts/check_once.mjs` emits structured JSON with `review_items`, and the scheduled standalone/project Codex Automation posts a Triage finding only when its LLM sees a reset signal.
+This skill intentionally does **not** send Telegram, Discord, Slack, ntfy, email, or generic webhook messages. The notification surface is Codex itself: `scripts/check_once.mjs` emits structured JSON with `review_items`, and the scheduled cron/project Codex Automation posts a Triage finding only when its LLM sees a reset signal.
 
 ## Required setup shape
 
@@ -17,9 +17,9 @@ The repo includes `.codex/config.toml`, a project-level Codex permission profile
 
 If an older `sandbox_mode` setting is active, Codex ignores permission profiles. In that compatibility path, use `.codex/rules/codex-reset-watchdog.rules`, which allows only `node scripts/check_once.mjs` to run outside the sandbox for network access.
 
-The user does not need a paid API key. There are no Python or npm dependencies to install. The preferred user journey is one prompt copied from the README: Codex installs this skill from `https://github.com/thinkingjimmy/codex-reset-watchdog`, runs validation, primes state, creates an hourly standalone/project Automation, and gives the user a concise setup summary.
+The user does not need a paid API key. There are no Python or npm dependencies to install. The preferred user journey is split in two: first, a README install prompt asks Codex to install this skill from `https://github.com/thinkingjimmy/codex-reset-watchdog`, run validation, prime state, and summarize the installed directory; second, the user manually creates an hourly cron/project Automation in the Codex UI by copying the README Automation prompt.
 
-When setting this project up for a user, Codex should run the Node self-test, prime state, dry-run the check, and create the Automation itself instead of asking the user to run terminal commands. Do not paste raw JSON in the final setup response unless the user asks for it.
+When setting this project up for a user, Codex should run the Node self-test, prime state, and dry-run the check instead of asking the user to run terminal commands. Do not create, update, or test an Automation during the install prompt. Do not paste raw JSON in the final setup response unless the user asks for it.
 
 During one-prompt setup, keep user-facing output quiet. Send intermediate messages only when approval is required or the setup is blocked by something the user must resolve. Do not narrate tool-schema inspection, command attempts, retry details, raw JSON, or state file contents.
 
@@ -127,7 +127,7 @@ Promote when the item probably says Codex usage limits, weekly limits, quotas, r
 
 Do not promote when “reset” refers to git, branches, local workspace, cache, CLI config, password, tokens, settings, database, environment, session, UI reset button, or when the item negates a reset.
 
-## One-prompt install workflow
+## README install workflow
 
 If the user asks Codex to install this skill from GitHub, use Codex's skill installation workflow when available. The source repo is:
 
@@ -135,7 +135,7 @@ If the user asks Codex to install this skill from GitHub, use Codex's skill inst
 https://github.com/thinkingjimmy/codex-reset-watchdog
 ```
 
-If a skill installer is unavailable, clone the repo and use the cloned directory as the Automation working directory. After installation, find the directory containing `SKILL.md` and `scripts/check_once.mjs`.
+If a skill installer is unavailable, clone the repo and use the cloned directory as the future Automation working directory. After installation, find the directory containing `SKILL.md` and `scripts/check_once.mjs`.
 
 Then run:
 
@@ -150,14 +150,14 @@ Summarize setup in human language:
 - self-test pass/fail;
 - source URL and whether Dayclaw is reachable;
 - state file path and fallback status;
-- Automation cadence and command;
-- what the Codex Automations **Test/Run Now** button should show. Explain that it is an immediate normal run, not a parameterized test mode.
+- installed directory to use as the Automation working directory;
+- reminder that the user should manually create the Automation from the README prompt.
 
 Do not paste the full JSON output unless debugging.
 
-When creating the Automation, inspect the current Automation tool schema or an existing Automation config before calling create/update. Use a standalone/project cron Automation for detached workspace jobs; do not use a thread/heartbeat Automation attached to the setup chat. Current Codex versions may reject guessed parameters. If the schema exposes `rrule`, use `RRULE:FREQ=HOURLY;INTERVAL=1`; if it exposes `cwds`, pass the installed skill directory as a list. Do not invent `command` or `permissions` fields when the tool has none: the command is inside `references/automation-prompt.md`, and permissions come from `.codex/config.toml`. Include `model` and `reasoningEffort`/`reasoning` if the tool rejects the request without them, even if they appear optional. After creation, read the Automation back and verify kind/type, cadence, working directory, active status, command/prompt behavior, and prompt.
+Do not create or update Codex Automations in this install workflow. Codex Automation UI and schemas move faster than the docs; the user creates the Automation manually and copies the README Automation prompt.
 
-Keep setup output user-facing and quiet. During installation, intermediate messages are for approval requests and real blockers only. If creation succeeds, final setup output should be only: install directory, self-test, prime/dry-run status, state path, source health, Automation ID, standalone/project cron kind, cadence, active status, working directory/cwds, prompt source, and Test expectation. Mention rejected parameter attempts, schema probing, command retries, or raw state details only when creation ultimately fails or the user asks for debugging.
+Keep setup output user-facing and quiet. During installation, intermediate messages are for approval requests and real blockers only. Final setup output should be only: install directory, self-test, prime/dry-run status, state path, source health, and the working directory the user should choose when creating the Automation. Mention command retries or raw state details only when setup ultimately fails or the user asks for debugging.
 
 ## Maintainer workflow
 
@@ -215,9 +215,9 @@ node scripts/check_once.mjs --diagnose-network --json
 
 `dns.ok=false` or `http.reached=false` means the runtime cannot reach `api.dayclaw.com`; allow outbound HTTPS before debugging LLM behavior. Do not ask for full filesystem access merely to solve network reachability.
 
-### 6. Create a Codex Automation
+### 6. Manually create a Codex Automation
 
-Use a standalone/project cron Automation with the **full contents** of `references/automation-prompt.md` as the Automation prompt. Keep that prompt thin; this skill contains the processing rules. The default cadence is hourly because reset posts are usually advance notices rather than instant events.
+The user should create a cron/project Automation in the Codex UI with the **full contents** of `references/automation-prompt.md` as the Automation prompt. Keep that prompt thin; this skill contains the processing rules. The default cadence is hourly because reset posts are usually advance notices rather than instant events.
 
 Use the project-level `.codex/config.toml` profile `codex-reset-watchdog-net`: write access to the current workspace plus outbound HTTPS to `api.dayclaw.com`. The script reads `env` / `.env`, writes `var/state.json`, and calls the Dayclaw public source; it does not require full filesystem access.
 

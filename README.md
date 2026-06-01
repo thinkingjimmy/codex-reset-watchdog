@@ -6,7 +6,7 @@ This skill monitors public X posts from Codex lead `thsottiaux`, detects future-
 
 ## How To Use?
 
-### Copy And Paste The Prompt
+### Step 1: Copy And Paste The Prompt, Then Install The Skill
 
 Open Codex, click **New Chats**, start a new chat, then paste the prompt below. Codex will install this skill, run the basic checks, prime baseline state, and create an hourly Automation.
 
@@ -37,11 +37,13 @@ After installation:
 Do not paste raw JSON unless I explicitly ask. In the final summary, do not narrate schema retries that were already successfully resolved; mention them only if creation ultimately fails or I ask for debugging. Do not enable full access unless the narrow network permission path is unavailable and you explain the tradeoff first.
 ```
 
-### Test The Automation
+### Step 2: Test And Configure The Automation
 
-If everything works, click **Automations** in the Codex left navigation. You should see an Automation named **Codex Reset Watchdog**. Open it, then click the **Run Now** button in the top right.
+If everything works, click **Automations** in the Codex left navigation. You should see an Automation named **Codex Reset Watchdog**. Open its detail page:
 
-You should see a new run under **Previous Runs**. Open it to inspect the details. Automation run output may stay inside Automations instead of appearing in normal chats; user-facing delivery should come from Codex Automation notification configuration. No finding should be created for routine no-action runs. If recent `thsottiaux` posts are parsed correctly and the report says whether action is needed, the basic workflow is working.
+1. Click **Run Now** in the top right.
+2. You should see a new run under **Previous Runs**. Open it to inspect the details.
+3. Automation output may stay inside Automations instead of appearing in normal chats. You also need to set the Automation **Project** to **Chats**. After that, findings produced by the Automation will appear in Chats, making them easier to review day to day. If recent `thsottiaux` posts are parsed correctly and the report says whether action is needed, the basic workflow is working.
 
 [previous runs screenshot](images/previous-runs.png)
 

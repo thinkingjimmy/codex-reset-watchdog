@@ -37,7 +37,7 @@ When `DAYCLAW_SOURCE_ITEMS_URL` is blank, `scripts/check_once.mjs` derives `http
 1. Use `scripts/check_once.mjs` as the runtime entrypoint for scheduled monitoring.
 2. Fetch the Dayclaw public source items endpoint. Do not require API keys, paid credentials, browser cookies, or manual X/Twitter browsing.
 3. Emit **every new unseen item** as a `review_items` entry. Do not pre-filter the batch with deterministic reset rules.
-4. Let the Codex Automation LLM judge announcement intent. Alert when the item says or strongly implies that Codex usage, quota, rate limits, weekly limits, caps, credits, allowance, or capacity will be reset/refilled/restored, or were just reset as remediation.
+4. Let the Codex Automation LLM judge announcement intent. Alert when the item says or strongly implies that Codex usage, quota, rate limits, weekly limits, caps, credits, allowance, or capacity will be reset/refilled/restored in the future, or were just reset as remediation.
 5. Avoid false positives from non-quota meanings of reset: git reset, branch reset, cache reset, password reset, environment reset, session reset, config reset, reset button, reset command, or negated wording like “not going to reset”.
 6. Mark each emitted item ID as seen in the JSON state file so the same source item is not sent to the LLM every run.
 7. Retry transient Dayclaw DNS/network failures inside the same run. If all retries fail, emit JSON `status=transient_network_error` and report on the threshold failure, then only every `OPERATIONAL_ERROR_REPORT_EVERY_FAILURES` failures while the outage continues.
@@ -95,15 +95,17 @@ Every scheduled run should follow this protocol:
 7. If `api_warning` is present, create one operational finding with `source_url`, `fetched`, `api_warning`, and `api_pages`.
 8. If `review_items` is non-empty, judge every item with `references/llm-judge-rubric.md`. Create a Triage finding only for new items that probably announce, confirm, schedule, complete, or remediate a Codex usage/quota/rate-limit reset, refill, restored allowance, or make-good.
 9. Use `fetched_items` for the human report even when `review_items` is empty because the state was already primed. Do not create Triage findings from already-seen `fetched_items`; they are context for the review table only.
-10. Always end with a concise reset-focused Markdown report. The first sentence should answer the user’s actual question: `No Codex reset signal found` or `Codex reset signal found`.
+10. Always end with a concise reset-focused Markdown report. The first visible line must be an emoji-led banner: `🚨 Codex reset signal found: <what>. Reset timing: <when>.`, `⚠️ Possible Codex reset signal needs review: <why>.`, or `✅ No Codex reset signal found.`
 11. Do not read or write automation memory for routine runs. Write memory only for setup completion, configuration changes, positive reset findings, reportable operational errors, or explicit user-requested diagnostics.
 
 Run reports should be short and reviewable:
 
-- explain the reset/no-reset conclusion using fetched item wording;
-- include a Markdown table for `fetched_items` with columns `Time`, `Reset?`, `Item`, and `Link`;
+- explain the reset/no-reset conclusion using fetched item wording; do not downgrade a positive fetched signal merely because `new_items=0` or no Triage finding is allowed;
+- include a Markdown table for `fetched_items` with columns `Time`, `Reset?`, `Reset timing`, `Item`, and `Link`;
 - include all fetched rows when there are 10 or fewer; if there are more, show the newest 10 and say how many were omitted;
-- set `Reset?` to `yes`, `no`, or `unclear`; one unclear row is enough reason to mention that a human should review it;
+- put rows with `Reset?` = `🚨 yes` or `⚠️ unclear` before `✅ no` rows so the signal is not buried;
+- set `Reset?` to `🚨 yes`, `✅ no`, or `⚠️ unclear`; one unclear row is enough reason to mention that a human should review it;
+- fill `Reset timing` for every `yes` or `unclear` row. Use the item's wording (`tomorrow morning`, `later today`, `after the deploy`) and derive an absolute date from `created_at` when possible; if timezone is unknown, say so briefly. Use `-` for clear no rows;
 - keep each `Item` cell to one concise sentence and use the item URL as a short Markdown link;
 - include `new_items` / `review_count` and whether a Triage finding was created;
 - mention source health only when useful;
@@ -113,7 +115,7 @@ The Automation prompt cannot reliably know whether a run came from the Test butt
 
 ## Reset judgment policy
 
-Promote when the item probably says Codex usage limits, weekly limits, quotas, rate limits, caps, credits, allowance, or capacity will be reset, refilled, restored, replenished, topped up, raised, or made good.
+Promote when the item probably says Codex usage limits, weekly limits, quotas, rate limits, caps, credits, allowance, or capacity will be reset, refilled, restored, replenished, topped up, raised, or made good. Future scheduled language is a positive signal: `will reset`, `resetting tomorrow morning`, `later today`, `this week`, `after the deploy`, and similar wording all qualify.
 
 Do not promote when “reset” refers to git, branches, local workspace, cache, CLI config, password, tokens, settings, database, environment, session, UI reset button, or when the item negates a reset.
 

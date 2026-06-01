@@ -8,6 +8,7 @@ The item probably means one of these:
 
 - Codex usage limits, weekly limits, quotas, rate limits, caps, credits, allowance, or capacity will be reset, refilled, restored, replenished, topped up, raised, or otherwise made good.
 - A reset/refill/remediation is scheduled or expected soon: later today, tomorrow, this week, after a deploy, after an incident, or similar.
+- Future scheduled wording is positive even if the reset has not happened yet: “will reset”, “resetting tomorrow morning”, “we are going to refill”, “limits should be restored later today”, and similar phrases qualify.
 - The target author gives a terse affirmative reply only when the provided item text or metadata makes the Codex quota/usage reset context clear.
 - The wording avoids the word “reset” but means the same operational outcome, for example “affected users should get their weekly allowance back” or “we’ll take care of folks who hit the limit because of the incident”.
 
@@ -24,6 +25,7 @@ The item probably means one of these:
 If you promote an item, create one concise Codex Triage finding containing:
 
 - why it likely signals a Codex reset/refill/restored allowance/remediation;
+- reset timing, including the item wording and an absolute date derived from `created_at` when possible;
 - item text and available context when relevant;
 - author, created time, URL, and event key.
 

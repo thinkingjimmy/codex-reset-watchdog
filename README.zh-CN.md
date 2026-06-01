@@ -12,7 +12,7 @@
 - 只在值得注意时打扰：没有 reset / refill / restored allowance 信号时不发 Triage、不写 routine memory。
 - 不重复提醒：同一个 item 只处理一次，后续新消息仍可继续触发。
 - 网络抖动不刷屏：短暂 Dayclaw DNS/network 失败不会立刻变成噪声告警。
-- Automation 运行结果返回可审阅报告：用户点 Test 或查看 run log 时，应该看到 fetched items 表格，而不是整坨 JSON。
+- Automation 运行结果返回醒目的可审阅报告：用户点 Test 或查看 run log 时，应该看到 emoji 信号、reset 时间和 fetched items 表格，而不是整坨 JSON。
 - 通知面单一：所有结果只进入 Codex Automation / Triage，不外发到聊天软件或 webhook。
 
 ## Skill 结构
@@ -87,15 +87,21 @@ Codex 会先验证脚本能跑，再把当前已有 public items 标记为基线
 Setup 后，点击 Codex Automations 里的 **Test**。Codex 对 Test 和定时运行使用同一份 Automation prompt，所以每次运行都会用一段简短 Markdown 报告收尾，例如：
 
 ```text
-未发现 Codex reset 信号。
+✅ 未发现 Codex reset 信号。
 
-| 时间 | Reset? | 内容 | 链接 |
-| --- | --- | --- | --- |
-| 2026-05-29 01:40 | no | Codex Thursday 改到 Friday；没有 usage/quota reset 语义。 | link |
-| 2026-05-27 14:59 | no | Codex model availability 更新；没有 allowance refill 或 rate-limit reset。 | link |
+| 时间 | Reset? | Reset 时间 | 内容 | 链接 |
+| --- | --- | --- | --- | --- |
+| 2026-05-29 01:40 | ✅ no | - | Codex Thursday 改到 Friday；没有 usage/quota reset 语义。 | link |
+| 2026-05-27 14:59 | ✅ no | - | Codex model availability 更新；没有 allowance refill 或 rate-limit reset。 | link |
 
 Fetched：10；新 item：0；review items：0；Triage finding：无。
 Source 健康。
+```
+
+如果发现 reset 信号，第一行应该更醒目，并直接给出时间：
+
+```text
+🚨 发现 Codex reset 信号：limits will reset tomorrow morning。Reset 时间：2026-06-01 morning（来自 "tomorrow morning"，timezone unknown）。
 ```
 
 结果不应该直接贴 `check_once.mjs --json` 的完整对象。健康 no-op 运行不应创建 Triage finding、不应外发通知、不应写 routine memory；简短报告可以出现在 Automation run log 和 Test 结果里。

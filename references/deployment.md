@@ -107,15 +107,21 @@ Codex Automations may use the same prompt for the Test button and scheduled runs
 A healthy no-op run after priming should say:
 
 ```text
-No Codex reset signal found.
+✅ No Codex reset signal found.
 
-| Time | Reset? | Item | Link |
-| --- | --- | --- | --- |
-| 2026-05-29 01:40 | no | Codex Thursday moved to Friday; no usage/quota reset language. | link |
-| 2026-05-27 14:59 | no | Codex model availability update; no allowance refill or rate-limit reset. | link |
+| Time | Reset? | Reset timing | Item | Link |
+| --- | --- | --- | --- | --- |
+| 2026-05-29 01:40 | ✅ no | - | Codex Thursday moved to Friday; no usage/quota reset language. | link |
+| 2026-05-27 14:59 | ✅ no | - | Codex model availability update; no allowance refill or rate-limit reset. | link |
 
 Fetched: 10; new items: 0; review items: 0; Triage finding: none.
 Source is healthy.
+```
+
+A positive run should start with a high-signal banner:
+
+```text
+🚨 Codex reset signal found: limits will reset tomorrow morning. Reset timing: 2026-06-01 morning (from "tomorrow morning"; timezone unknown).
 ```
 
 Healthy no-op runs should not create Triage findings, external notifications, or routine automation memory. The concise report is safe for Automation run logs and Test results.

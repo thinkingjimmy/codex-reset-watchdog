@@ -12,7 +12,7 @@ A zero-dependency Codex skill repo for monitoring [`@thsottiaux`](https://x.com/
 - Stays quiet when nothing matters: no reset/refill/restored-allowance signal means no finding.
 - Avoids repeat noise: the same item is handled once, while future new posts remain eligible.
 - Handles network blips calmly: transient Dayclaw DNS/network failures do not immediately spam Triage.
-- Makes Automation runs readable: the run result should be a short Markdown report with a fetched-items review table, not raw JSON.
+- Makes Automation runs readable: the run result should be an emoji-led Markdown report with reset timing and a fetched-items review table, not raw JSON.
 - Keeps one notification surface: findings appear only in Codex Automation/Triage, not external channels.
 
 ## Skill Layout
@@ -85,15 +85,21 @@ Codex will verify the script, prime the current public items as the baseline, th
 After setup, click **Test** in Codex Automations. Codex uses the same Automation prompt for Test and scheduled runs, so every run ends with a short Markdown report like:
 
 ```text
-No Codex reset signal found.
+✅ No Codex reset signal found.
 
-| Time | Reset? | Item | Link |
-| --- | --- | --- | --- |
-| 2026-05-29 01:40 | no | Codex Thursday moved to Friday; no usage/quota reset language. | link |
-| 2026-05-27 14:59 | no | Codex model availability update; no allowance refill or rate-limit reset. | link |
+| Time | Reset? | Reset timing | Item | Link |
+| --- | --- | --- | --- | --- |
+| 2026-05-29 01:40 | ✅ no | - | Codex Thursday moved to Friday; no usage/quota reset language. | link |
+| 2026-05-27 14:59 | ✅ no | - | Codex model availability update; no allowance refill or rate-limit reset. | link |
 
 Fetched: 10; new items: 0; review items: 0; Triage finding: none.
 Source is healthy.
+```
+
+When a reset signal is present, the first line should be stronger and include timing:
+
+```text
+🚨 Codex reset signal found: limits will reset tomorrow morning. Reset timing: 2026-06-01 morning (from "tomorrow morning"; timezone unknown).
 ```
 
 The result should not paste the raw `check_once.mjs --json` object. Healthy no-op runs should not create Triage findings, external notifications, or routine automation memory; the concise report is safe to show in Automation run logs and Test results.

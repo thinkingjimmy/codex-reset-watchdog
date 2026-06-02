@@ -121,14 +121,29 @@ A healthy no-op run after priming should say:
 
 ```text
 ✅ No actionable future Codex reset signal.
-Fetched: 10; new items: 0; review items: 0; Triage finding: none.
-Historical reset posts in the current batch are already completed or expired, so no user action is needed.
 ```
 
-A positive run should start with a high-signal banner:
+If the fetched batch contains reset-related historical context but nothing actionable, keep the normal status details out and show only reset-related rows:
 
-```text
-🚨 Actionable Codex reset ahead: limits will reset tomorrow morning. Reset timing: 2026-06-01 morning (from "tomorrow morning"; report timezone: user's local timezone).
+```markdown
+✅ No actionable future Codex reset signal.
+
+| Time | Evidence | Reset timing | Actionability | Link |
+| --- | --- | --- | --- | --- |
+| 2026-05-31 13:59 Asia/Shanghai | Said limits would reset "tomorrow morning". | 2026-06-01 morning | history; expired | https://x.com/example/status/1 |
+| 2026-05-31 23:25 Asia/Shanghai | Confirmed paid ChatGPT Codex limits had reset. | 2026-05-31 23:25 | history; completed | https://x.com/example/status/2 |
+```
+
+A positive run should start with a high-signal banner and include a reset-only evidence table:
+
+```markdown
+🚨 Actionable Codex reset ahead: paid ChatGPT Codex limits are scheduled to reset. Reset timing: 2026-06-03 morning (Asia/Shanghai).
+
+| Time | Evidence | Reset timing | Actionability | Link |
+| --- | --- | --- | --- | --- |
+| 2026-06-02 22:15 Asia/Shanghai | Said limits are "resetting tomorrow morning". | 2026-06-03 morning | 🚨 future | https://x.com/example/status/3 |
+
+Action: use remaining Codex quota before the reset; consider fast mode if it helps spend down quota.
 ```
 
 Operational failures are not reset signals. A source or runtime failure should start with an operational banner such as:
@@ -137,7 +152,7 @@ Operational failures are not reset signals. A source or runtime failure should s
 ⚠️ Watchdog source unreachable: api.dayclaw.com DNS/HTTPS failed; no reset judgment was made.
 ```
 
-Routine no-op runs should not repeat the full fetched-items table, create Triage findings, send external notifications, or write routine automation memory. The concise report is safe for Automation run logs and Test/Run Now results. Test/Run Now is only an immediate run of the same Automation prompt; it is not a special mode and cannot pass per-run parameters.
+Routine no-op runs should not repeat normal status/source/state details, create Triage findings, send external notifications, or write routine automation memory. Include a table only for reset-related future, unclear, or historical rows, and show the original URL text in the `Link` column. Test/Run Now is only an immediate run of the same Automation prompt; it is not a special mode and cannot pass per-run parameters.
 
 Do not validate the Automation by pasting its prompt into a normal Chat/Agent session. A normal chat may run outside the Project runtime root and therefore miss both the Automation `cwds` and the `.codex/config.toml` permission profile. The usual symptom is a combined false operational failure: `api.dayclaw.com` DNS/HTTPS blocked and `var/state.json` not writable. Validate with the Automation detail page's Run Now button, and make sure `cwds` points at the Project runtime root.
 

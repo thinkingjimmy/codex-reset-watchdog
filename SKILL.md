@@ -105,15 +105,17 @@ Every scheduled run should follow this protocol:
 Run reports should be short and reviewable:
 
 - compare candidate reset timing against `run_time.created_at_local` plus `local_timezone`; the alert exists to help the user spend tokens before reset, so completed or past resets are historical and not actionable;
+- if `status=ok` and there is no actionable future, unclear future, or historical reset-related item worth reviewing, output only `✅ No actionable future Codex reset signal.`;
+- do not mention normal `status`, source health, state path, `new_items`, `review_count`, or Triage status on healthy no-op runs unless the user explicitly asks for diagnostics;
 - explain the actionable/no-action conclusion using fetched item wording; do not call a completed reset `🚨` just because the text contains “reset”;
-- include a Markdown table for `fetched_items` with columns `Time`, `Reset?`, `Reset timing`, `Item`, and `Link`;
-- include the table only when there is a new review item, an actionable future reset, an unclear future signal, or an explicit diagnostic request; routine `new_items=0` runs with only historical/completed signals should return a compact no-action summary instead of repeating the full table;
-- put rows with `Reset?` = `🚨 future` or `⚠️ unclear` before `✅ no` and `history` rows so the signal is not buried;
-- set `Reset?` to `🚨 future`, `history`, `✅ no`, or `⚠️ unclear`; one unclear future row is enough reason to mention that a human should review it;
-- fill `Reset timing` for every `yes` or `unclear` row. Use the item's wording (`tomorrow morning`, `later today`, `after the deploy`) and derive an absolute date from `created_at_local` plus `local_timezone`; do not say timezone unknown when `local_timezone` is present. Use `-` for clear no rows;
-- keep each `Item` cell to one concise sentence and use the item URL as a short Markdown link;
-- include `new_items` / `review_count` and whether a Triage finding was created;
-- mention source health only when useful;
+- when any reset-related future, unclear, or historical/completed item is present, include a compact Markdown table for reset-related items only, with columns `Time`, `Evidence`, `Reset timing`, `Actionability`, and `Link`;
+- the `Link` cell must display the original URL text, not only an icon, domain label, or hidden link;
+- do not include rows for unrelated `✅ no` items unless an explicit diagnostic request asks for all fetched items;
+- put `🚨 future` and `⚠️ unclear` rows before `history` rows so the signal is not buried;
+- fill `Reset timing` for every future, unclear, or history row. Use the item's wording (`tomorrow morning`, `later today`, `after the deploy`) and derive an absolute date from `created_at_local` plus `local_timezone`; do not say timezone unknown when `local_timezone` is present;
+- keep each `Evidence` cell to one concise sentence;
+- when a future actionable reset exists, add one short action line after the table telling the user to use remaining Codex quota before the reset, optionally with fast mode;
+- mention source health only for operational failures or explicit diagnostics;
 - avoid process narration such as checking memory, waiting for commands, choosing paths, writing memory, or restating every command.
 - do not emit progress updates while the command is running; final run output should carry the result.
 
@@ -248,7 +250,7 @@ Then it should:
 - if multiple items are clearly the same event, report only the strongest one;
 - report command failures or repeated source errors when likely to cause missed detections;
 - create no Triage finding when there are no review items, no positive LLM judgment, and no reportable operational errors;
-- return a concise human Markdown report with a fetched-items table, source reachability, fetched/new counts, and reset finding status; do not rely on knowing whether the run came from the Test button or the schedule;
+- return a concise human Markdown report: one-line healthy no-op when there is no reset-related context; otherwise a reset-related table with original links; do not rely on knowing whether the run came from the Test button or the schedule;
 - do not write automation memory for routine `status=ok`, `new_items=0`, `review_count=0` runs.
 
 Do not run `self_test`, `--prime-state`, or `--dry-run` during ordinary scheduled runs. They are setup/pre-enable checks only.

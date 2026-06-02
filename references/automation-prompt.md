@@ -13,4 +13,4 @@ Do not emit progress narration while running. Do not inspect or update automatio
 
 If JSON status is `transient_network_error`, `network_diagnostic`, or `error`, treat it as a watchdog operational issue, not a possible Codex reset. Never use the reset banners for source/network/state failures.
 
-Omit the full repeated table on routine `new_items=0` runs when no future actionable or unclear signal remains. Do not output raw JSON, process narration, or routine memory notes.
+For healthy no-signal runs, output only the no-action banner. If reset-related future, unclear, or historical items are present, include a compact reset-only Markdown table with original URL text in the Link column. Do not output normal status/source/state details, raw JSON, process narration, or routine memory notes.

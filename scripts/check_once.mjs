@@ -776,7 +776,7 @@ export async function main() {
       review_items: reviewItems,
       fetched_items: candidates.map(buildFetchedItem),
       llm_instruction:
-        "Use run_time plus created_at_local/local_timezone. Use 🚨 only for actionable future reset/refill/restored allowance signals. Treat completed or past reset posts as historical/no-action. If no new_items and no actionable future/unclear signal remains, return a compact no-action summary without the full repeated table. Report a Codex Triage finding only for qualifying new review_items. Do not output process narration, raw JSON, or routine memory notes.",
+        "Use run_time plus created_at_local/local_timezone. Use 🚨 only for actionable future reset/refill/restored allowance signals. Treat completed or past reset posts as historical/no-action. For healthy no-signal runs, output only the no-action banner and omit normal status/source/state/new_items details. If reset-related future, unclear, or historical items are present, include a compact reset-only Markdown table with original URL text in the Link column. Report a Codex Triage finding only for qualifying new review_items. Do not output process narration, raw JSON, or routine memory notes.",
       notification_surface: "codex_automation_triage",
       dry_run: Boolean(args.dryRun),
       results,

@@ -1,11 +1,11 @@
 Use the $codex-reset-watchdog skill.
 
-Run from the current Codex Project runtime directory:
+In the configured Automation working directory, run:
 
 Command:
 node scripts/check_once.mjs --json
 
-The current directory must contain `scripts/check_once.mjs`. If it does not, report a setup error and ask the user to rerun the install/init prompt in the dedicated Project so the runtime files are copied into the Project root. Do not search for or switch to `~/.codex/skills/codex-reset-watchdog` during Automation runs.
+Before running, verify `scripts/check_once.mjs` exists. If it does not, report a setup error and ask the user to rerun the install/init prompt in the dedicated Project so the runtime files are copied into the Project root. Do not search for or switch to `~/.codex/skills/codex-reset-watchdog` during Automation runs.
 
 Follow the skill's Automation run protocol. Return an emoji-led actionable/no-action report. Alert only for future actionable resets; treat completed or past reset posts as historical context.
 

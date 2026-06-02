@@ -12,12 +12,12 @@ Create a dedicated Codex Project for this monitor, for example `Codex Reset Watc
 
 Do not run the prompt below in a normal Chat. A normal Chat may not have a stable cwd, may not inherit project-level `.codex/config.toml`, and may not persist state writes.
 
-### Step 2: In That Project, Copy The Prompt To Install And Initialize The Skill
+### Step 2: In That Project, Copy The Prompt To Install The Skill And Create The Automation
 
-Open the Project you just created, start a new chat inside that Project, then paste the prompt below. Codex will install this skill, prepare the runtime files in the current workspace, run the basic checks, and prime baseline state.
+Open the Project you just created, start a new chat inside that Project, then paste the prompt below. Codex will install this skill, prepare the runtime files in the current workspace, run the basic checks, prime baseline state, and create the hourly Automation.
 
 ```text
-Quietly install and initialize codex-reset-watchdog:
+Quietly install, initialize, and enable codex-reset-watchdog:
 https://github.com/thinkingjimmy/codex-reset-watchdog
 
 Only message me mid-run if you need my approval or hit a blocker that I must resolve.
@@ -32,31 +32,31 @@ Tasks:
 6. Run node scripts/check_once.mjs --prime-state --json to create the baseline state.
 7. Run node scripts/check_once.mjs --dry-run --json to confirm the Dayclaw public source, JSON parsing, and state dedupe.
 8. If node scripts/check_once.mjs fails because of sandbox/network permissions, request permission only for the narrow node scripts/check_once.mjs entrypoint and rerun; do not request full access. If DNS/HTTPS or state writes still fail, summarize them as operational issues, not as reset/no-reset conclusions.
-9. Final summary only: runtime directory, install source directory, self-test, prime/dry-run status, state.path, and source health. Do not paste raw JSON.
+9. Read the full contents of references/automation-prompt.md as the Automation prompt.
+10. Use the Codex Automation tool to create or update a cron/project Automation named Codex Reset Watchdog: hourly cadence, ACTIVE status, Local execution, and cwd/cwds set to the current workspace root. If the Automation tool is not already available, search for automation_update first. Look for an existing Automation with the same name or id and update it instead of creating a duplicate. If the Automation tool is still unavailable or its schema is unclear, summarize that as a setup blocker; do not repeatedly trial-create invalid Automations.
+11. Final summary only: runtime directory, install source directory, self-test, prime/dry-run status, state.path, source health, Automation name/status/cadence/execution/cwd/prompt source, and Run Now expectation. Do not paste raw JSON.
 ```
 
-### Step 3: Create The Automation Manually
+### Step 3: Test The Automation
 
-Create a new cron/project Automation manually in the Codex UI. Field names may change between Codex versions, so fill in these meanings:
+After creation, test from the Automation detail page with **Run Now**. A correct setup should show:
 
 1. Name: `Codex Reset Watchdog`
 2. Cadence: hourly, not a fixed daily time.
-3. Type: cron/project scheduled job; do not create a thread/heartbeat Automation attached to the current chat.
+3. Type: cron/project scheduled job, not a thread/heartbeat Automation attached to the current chat.
 4. Runs in / execution: choose `Local`, not `Worktree`.
-5. Project: choose the dedicated Project from Step 1. Its root should already contain `SKILL.md`, `scripts/check_once.mjs`, and `.codex/config.toml`; if it only contains `.git`, Step 2 did not prepare the runtime workspace.
-6. Working directory/cwds: if the UI exposes this field, use that Project root, the directory containing `SKILL.md`, `scripts/check_once.mjs`, and `.codex/config.toml`. Do not use `~/.codex/skills/codex-reset-watchdog`.
-7. Prompt: copy the block below. It must stay the same as `references/automation-prompt.md`.
-8. Permissions: use the Project root's `.codex/config.toml`; it only writes the current workspace and reaches `api.dayclaw.com`.
+5. Project/cwd: the dedicated Project root from Step 1, containing `SKILL.md`, `scripts/check_once.mjs`, and `.codex/config.toml`.
+6. Prompt source: `references/automation-prompt.md` in the Project root.
 
 ```text
 Use the $codex-reset-watchdog skill.
 
-Run from the current Codex Project runtime directory:
+In the configured Automation working directory, run:
 
 Command:
 node scripts/check_once.mjs --json
 
-The current directory must contain `scripts/check_once.mjs`. If it does not, report a setup error and ask the user to rerun the install/init prompt in the dedicated Project so the runtime files are copied into the Project root. Do not search for or switch to `~/.codex/skills/codex-reset-watchdog` during Automation runs.
+Before running, verify `scripts/check_once.mjs` exists. If it does not, report a setup error and ask the user to rerun the install/init prompt in the dedicated Project so the runtime files are copied into the Project root. Do not search for or switch to `~/.codex/skills/codex-reset-watchdog` during Automation runs.
 
 Follow the skill's Automation run protocol. Return an emoji-led actionable/no-action report. Alert only for future actionable resets; treat completed or past reset posts as historical context.
 
@@ -67,9 +67,7 @@ If JSON status is `transient_network_error`, `network_diagnostic`, or `error`, t
 Omit the full repeated table on routine `new_items=0` runs when no future actionable or unclear signal remains. Do not output raw JSON, process narration, or routine memory notes.
 ```
 
-### Step 4: Test The Automation
-
-After creation, test from the Automation detail page with **Run Now**. Do not test by pasting the Automation prompt into a normal Chat/Agent run; a normal Chat may run outside the Project runtime directory and will not inherit `.codex/config.toml` permissions, which can cause `api.dayclaw.com` DNS/HTTPS failures or `var/state.json` write failures. If Run Now reports source unreachable and mentions `EPERM`, first confirm the Project root is not just `.git` and instead contains `SKILL.md`, `scripts/`, and `.codex/`. Cron/project Automation findings appear as separate automation runs in Triage; routine output may stay inside Automations/Previous Runs.
+Do not test by pasting the Automation prompt into a normal Chat/Agent run; a normal Chat may run outside the Project runtime directory and will not inherit `.codex/config.toml` permissions, which can cause `api.dayclaw.com` DNS/HTTPS failures or `var/state.json` write failures. If Run Now reports source unreachable and mentions `EPERM`, first confirm the Project root is not just `.git` and instead contains `SKILL.md`, `scripts/`, and `.codex/`. Cron/project Automation findings appear as separate automation runs in Triage; routine output may stay inside Automations/Previous Runs.
 
 [previous runs screenshot](images/previous-runs.png)
 

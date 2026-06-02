@@ -10,9 +10,9 @@ The intended user flow starts with a dedicated Codex Project that acts as the wa
 https://github.com/thinkingjimmy/codex-reset-watchdog
 ```
 
-Then Codex should copy the runtime files into the current Project workspace, run setup checks, prime state, and summarize the runtime directory in human language. The user manually creates the hourly cron/project Automation in the Codex UI, using that Project runtime root as cwd and the README-embedded copy of `references/automation-prompt.md` as the prompt. Users only need a local `env` or `.env` file when they want to override defaults.
+Then Codex should copy the runtime files into the current Project workspace, run setup checks, prime state, create or update the hourly cron/project Automation, and summarize the result in human language. Users only need a local `env` or `.env` file when they want to override defaults.
 
-The README setup prompt is intentionally quiet and focused on installation, runtime workspace preparation, and init only. Keep Project and Automation guidance in the README prose outside the copyable setup prompt. Apply the setup notes in this document silently, and send intermediate user messages only for approval requests or real blockers. Do not turn schema probing, command retries, raw JSON, or state-file inspection into the setup story.
+The README setup prompt is intentionally quiet and focused on installation, runtime workspace preparation, validation, and Automation enablement. Apply the setup notes in this document silently, and send intermediate user messages only for approval requests or real blockers. Do not turn schema probing, command retries, raw JSON, or state-file inspection into the setup story.
 
 The target account is already set:
 
@@ -81,7 +81,7 @@ Use the project-level `.codex/config.toml` profile `codex-reset-watchdog-net`. T
 
 If the Codex UI only lets local shell commands reach the network after enabling full access, treat that as a runtime permission limitation. The project itself still only needs workspace write plus network egress, so full access should be a temporary fallback rather than the recommended setup.
 
-After install initialization succeeds, the user should manually create a cron/project Automation that runs hourly:
+After install initialization succeeds, Codex should create or update a cron/project Automation that runs hourly:
 
 ```bash
 node scripts/check_once.mjs --json
@@ -91,9 +91,9 @@ Use the README-embedded copy of `references/automation-prompt.md` as the Automat
 
 Setup-only commands are `node scripts/self_test.mjs`, `node scripts/check_once.mjs --prime-state --json`, and `node scripts/check_once.mjs --dry-run --json`. Do not run them on every schedule.
 
-## Manual Automation creation notes
+## Automation creation notes
 
-Do not ask the install prompt to create or update Automations. Current Codex Automation tools may leave invalid partial Automations behind while retrying schema shapes, so the user should create the scheduled job manually in the UI. Use the cron/project path for this watchdog, not a thread/heartbeat path.
+Use the Codex Automation tool from the install prompt after the Project runtime root is prepared and validated. If the tool is not already visible, search for `automation_update` first. Inspect existing Automations first; update an existing `codex-reset-watchdog` / `Codex Reset Watchdog` entry instead of creating a duplicate. Use the cron/project path for this watchdog, not a thread/heartbeat path.
 
 Minimum fields:
 
@@ -105,7 +105,9 @@ Minimum fields:
 - Prompt: the README-embedded copy of `references/automation-prompt.md`.
 - Permissions: rely on `.codex/config.toml` and the narrow `codex-reset-watchdog-net` profile.
 
-If the product UI asks for details such as `kind=cron`, local/worktree execution, model, reasoning effort, or a schedule format, the user should follow the current UI labels. Do not encode brittle UI details into the install prompt.
+If the Automation tool asks for details such as `kind=cron`, local/worktree execution, model, reasoning effort, or a schedule format, use the current tool schema labels. Do not encode brittle UI labels into the install prompt.
+
+If the Automation tool is unavailable or the schema cannot be resolved confidently, report a setup blocker. Do not repeatedly trial-create Automations; that is how invalid `Untitled` runs accumulate.
 
 If Run Now immediately leaves a red previous run or a "Run was archived" label, first inspect the Automation configuration. The usual cause is `execution_environment = "worktree"` or a `cwds` path whose Project root does not contain the runtime files.
 

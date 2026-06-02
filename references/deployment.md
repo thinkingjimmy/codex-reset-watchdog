@@ -10,9 +10,9 @@ The intended user flow starts with a dedicated Codex Project that acts as the wa
 https://github.com/thinkingjimmy/codex-reset-watchdog
 ```
 
-Then Codex should run setup checks, prime state, and summarize the installed directory in human language. The user manually creates the hourly cron/project Automation in the Codex UI, using the installed skill directory as cwd and the README-embedded copy of `references/automation-prompt.md` as the prompt. Users only need a local `env` or `.env` file when they want to override defaults.
+Then Codex should copy the runtime files into the current Project workspace, run setup checks, prime state, and summarize the runtime directory in human language. The user manually creates the hourly cron/project Automation in the Codex UI, using that Project runtime root as cwd and the README-embedded copy of `references/automation-prompt.md` as the prompt. Users only need a local `env` or `.env` file when they want to override defaults.
 
-The README setup prompt is intentionally quiet. Apply the setup notes in this document silently, and send intermediate user messages only for approval requests or real blockers. Do not turn schema probing, command retries, raw JSON, or state-file inspection into the setup story.
+The README setup prompt is intentionally quiet and focused on installation, runtime workspace preparation, and init only. Keep Project and Automation guidance in the README prose outside the copyable setup prompt. Apply the setup notes in this document silently, and send intermediate user messages only for approval requests or real blockers. Do not turn schema probing, command retries, raw JSON, or state-file inspection into the setup story.
 
 The target account is already set:
 
@@ -98,13 +98,18 @@ Do not ask the install prompt to create or update Automations. Current Codex Aut
 Minimum fields:
 
 - Name: `Codex Reset Watchdog`.
-- Cadence: hourly.
+- Cadence: hourly, not a fixed daily time.
 - Type: cron/project scheduled job, not thread/heartbeat.
-- Working directory/cwds: the installed skill directory that contains `SKILL.md`, `scripts/check_once.mjs`, and `.codex/config.toml`.
+- Execution: `Local`, not `Worktree`, unless the selected worktree itself contains the runtime files.
+- Working directory/cwds: the dedicated Project runtime root that contains `SKILL.md`, `scripts/check_once.mjs`, and `.codex/config.toml`; never an empty Project root that only contains `.git`, and never `~/.codex/skills/codex-reset-watchdog`.
 - Prompt: the README-embedded copy of `references/automation-prompt.md`.
 - Permissions: rely on `.codex/config.toml` and the narrow `codex-reset-watchdog-net` profile.
 
 If the product UI asks for details such as `kind=cron`, local/worktree execution, model, reasoning effort, or a schedule format, the user should follow the current UI labels. Do not encode brittle UI details into the install prompt.
+
+If Run Now immediately leaves a red previous run or a "Run was archived" label, first inspect the Automation configuration. The usual cause is `execution_environment = "worktree"` or a `cwds` path whose Project root does not contain the runtime files.
+
+If Run Now reports `source unreachable` together with `EPERM` for `var/state.json`, the usual cause is an Automation run that starts from an empty Project root and then falls back to `~/.codex/skills/codex-reset-watchdog`. Fix the Project runtime root instead of teaching the Automation prompt to switch directories.
 
 ## Run summary behavior
 
@@ -132,7 +137,7 @@ Operational failures are not reset signals. A source or runtime failure should s
 
 Routine no-op runs should not repeat the full fetched-items table, create Triage findings, send external notifications, or write routine automation memory. The concise report is safe for Automation run logs and Test/Run Now results. Test/Run Now is only an immediate run of the same Automation prompt; it is not a special mode and cannot pass per-run parameters.
 
-Do not validate the Automation by pasting its prompt into a normal Chat/Agent session. A normal chat may run outside the installed skill directory and therefore miss both the Automation `cwds` and the `.codex/config.toml` permission profile. The usual symptom is a combined false operational failure: `api.dayclaw.com` DNS/HTTPS blocked and `var/state.json` not writable. Validate with the Automation detail page's Run Now button, and make sure `cwds` points at the installed skill directory.
+Do not validate the Automation by pasting its prompt into a normal Chat/Agent session. A normal chat may run outside the Project runtime root and therefore miss both the Automation `cwds` and the `.codex/config.toml` permission profile. The usual symptom is a combined false operational failure: `api.dayclaw.com` DNS/HTTPS blocked and `var/state.json` not writable. Validate with the Automation detail page's Run Now button, and make sure `cwds` points at the Project runtime root.
 
 ## Public source model
 

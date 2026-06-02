@@ -95,17 +95,30 @@ Setup-only commands are `node scripts/self_test.mjs`, `node scripts/check_once.m
 
 Use the Codex Automation tool from the install prompt after the Project runtime root is prepared and validated. If the tool is not already visible, search for `automation_update` first. Inspect existing Automations first; update an existing `codex-reset-watchdog` / `Codex Reset Watchdog` entry instead of creating a duplicate. Use the cron/project path for this watchdog, not a thread/heartbeat path.
 
-Minimum fields:
+Minimum UI intent:
 
 - Name: `Codex Reset Watchdog`.
 - Cadence: hourly, not a fixed daily time.
 - Type: cron/project scheduled job, not thread/heartbeat.
-- Execution: `Local`, not `Worktree`, unless the selected worktree itself contains the runtime files.
+- Execution: local, not worktree, unless the selected worktree itself contains the runtime files.
 - Working directory/cwds: the dedicated Project runtime root that contains `SKILL.md`, `scripts/check_once.mjs`, and `.codex/config.toml`; never an empty Project root that only contains `.git`, and never `~/.codex/skills/codex-reset-watchdog`.
 - Prompt: the README-embedded copy of `references/automation-prompt.md`.
 - Permissions: rely on `.codex/config.toml` and the narrow `codex-reset-watchdog-net` profile.
 
-If the Automation tool asks for details such as `kind=cron`, local/worktree execution, model, reasoning effort, or a schedule format, use the current tool schema labels. Do not encode brittle UI labels into the install prompt.
+Current `automation_update` field set:
+
+- `mode`: `create` for a new Automation, `update` with the resolved `id` for an existing one.
+- `kind`: `cron`.
+- `name`: `Codex Reset Watchdog`.
+- `rrule`: `FREQ=HOURLY;INTERVAL=1`.
+- `status`: `ACTIVE`.
+- `executionEnvironment`: `local`.
+- `cwds`: the Project runtime root, preferably as an array with one path.
+- `prompt`: the full contents of `references/automation-prompt.md`, not the file path.
+- `reasoningEffort`: `medium`.
+- `model`: pass only if required by the current tool, using the current Codex default model.
+
+Do not pass unsupported UI-style fields such as `command`, `permissions`, `cwd`, `frequency`, `schedule`, `destination`, or thread/heartbeat fields. Those names are common sources of `invalid arguments`.
 
 If the Automation tool is unavailable or the schema cannot be resolved confidently, report a setup blocker. Do not repeatedly trial-create Automations; that is how invalid `Untitled` runs accumulate.
 

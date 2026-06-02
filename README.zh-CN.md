@@ -35,7 +35,7 @@ https://github.com/thinkingjimmy/codex-reset-watchdog
 7. 运行 node scripts/check_once.mjs --dry-run --json 确认 Dayclaw public source、JSON 解析和 state 去重正常。
 8. 如果 node scripts/check_once.mjs 因 sandbox/network 权限失败，只请求允许 node scripts/check_once.mjs 这个窄入口重跑；不要请求 full access。若仍是 DNS/HTTPS 或 state 写入问题，按运行级问题总结，不要当成 reset/no-reset 结论。
 9. 读取 references/automation-prompt.md 的完整内容作为 Automation prompt。
-10. 使用 Codex Automation 工具创建或更新名为 Codex Reset Watchdog 的 cron/project Automation：频率每小时一次，状态 ACTIVE，execution 使用 Local，cwd/cwds 使用当前 workspace 根目录。若当前工具列表没有 Automation 工具，先搜索 automation_update。先查找同名或同 id 的现有 Automation，有则 update，不要创建重复项。若 Automation 工具仍不可用或 schema 不明确，请把它作为 setup blocker 总结，不要通过反复试错创建多个无效 Automation。
+10. 使用 `automation_update` 创建或更新名为 Codex Reset Watchdog 的 cron/project Automation。若当前工具列表没有 Automation 工具，先搜索 `automation_update`。先查找同名或同 id 的现有 Automation，有则 update，不要创建重复项。创建/更新时使用这些字段，字段名和值不要替换成 UI 文案：`mode=create` 或 `mode=update`、`kind=cron`、`name=Codex Reset Watchdog`、`rrule=FREQ=HOURLY;INTERVAL=1`、`status=ACTIVE`、`executionEnvironment=local`、`cwds=[当前 workspace 根目录]`、`prompt=[references/automation-prompt.md 的完整内容]`、`reasoningEffort=medium`。不要传 `command`、`permissions`、`cwd`、`frequency`、`schedule`、`destination` 或 thread/heartbeat 字段。若工具要求 `model`，使用当前 Codex 默认模型。若这套字段仍被拒绝，请把它作为 setup blocker 总结，不要反复试错创建无效 Automation。
 11. 最终总结只包含：运行目录、安装源目录、self-test、prime/dry-run 状态、state.path、source health、Automation 名称/状态/频率/execution/cwd/prompt 来源，以及 Run Now 预期。不要贴原始 JSON。
 ```
 

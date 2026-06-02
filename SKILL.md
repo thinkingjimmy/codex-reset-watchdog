@@ -154,10 +154,12 @@ node scripts/check_once.mjs --dry-run --json
 Then create or update the Automation:
 
 - read the full contents of `references/automation-prompt.md`;
-- search for or use the current Codex Automation tool when it is not already visible;
+- search for or use `automation_update` when the Codex Automation tool is not already visible;
 - inspect existing Automations for id/name `codex-reset-watchdog` / `Codex Reset Watchdog`;
 - update the existing Automation when present, otherwise create one;
-- use cron/project Automation, hourly cadence, ACTIVE status, Local execution, and the current Project runtime root as `cwds`;
+- use the current tool schema fields exactly: `mode=create` or `mode=update`, `kind=cron`, `name=Codex Reset Watchdog`, `rrule=FREQ=HOURLY;INTERVAL=1`, `status=ACTIVE`, `executionEnvironment=local`, `cwds=[current Project runtime root]`, `prompt=[full automation prompt]`, and `reasoningEffort=medium`;
+- pass `model` only if the tool requires it, using the current Codex default model;
+- do not pass unsupported UI-style fields such as `command`, `permissions`, `cwd`, `frequency`, `schedule`, `destination`, or thread/heartbeat fields;
 - do not create thread/heartbeat Automations for this watchdog;
 - if the Automation tool is unavailable or schema validation is unclear, report a setup blocker instead of repeatedly trial-creating invalid Automations.
 
@@ -233,7 +235,7 @@ node scripts/check_once.mjs --diagnose-network --json
 
 Create a cron/project Automation with the README-embedded copy of `references/automation-prompt.md` as the Automation prompt. Keep that prompt thin; this skill contains the processing rules. The default cadence is hourly because reset posts are usually advance notices rather than instant events.
 
-Use the current Codex Automation tool. Use `Local` execution with the dedicated Project runtime root as `cwds`. That directory must contain `SKILL.md`, `scripts/check_once.mjs`, and `.codex/config.toml`. Do not use `~/.codex/skills/codex-reset-watchdog` as the Automation cwd; the UI may not apply its permission profile or allow persistent writes there. Do not use `Worktree` unless the selected worktree itself contains the runtime files; otherwise Run Now can start from an empty Project worktree and immediately end as an archived/failed run.
+Use the current Codex Automation tool. In the tool schema, use `executionEnvironment=local` with the dedicated Project runtime root as `cwds`. That directory must contain `SKILL.md`, `scripts/check_once.mjs`, and `.codex/config.toml`. Do not use `~/.codex/skills/codex-reset-watchdog` as the Automation cwd; the UI may not apply its permission profile or allow persistent writes there. Do not use `executionEnvironment=worktree` unless the selected worktree itself contains the runtime files; otherwise Run Now can start from an empty Project worktree and immediately end as an archived/failed run.
 
 Use the project-level `.codex/config.toml` profile `codex-reset-watchdog-net`: write access to the current workspace plus outbound HTTPS to `api.dayclaw.com`. The script reads `env` / `.env`, writes `var/state.json`, and calls the Dayclaw public source; it does not require full filesystem access.
 

@@ -41,7 +41,7 @@ https://github.com/thinkingjimmy/codex-reset-watchdog
 
 ### 第三步：测试 Automation
 
-创建完成后，在 Automation 详情页点击 Run Now 测试。按照预期会在 Codex Reset Watchdog 的 Project 里看到最新的 chat 输出。
+创建完成后，在 Automation 详情页（图中 1）点击 Run Now （图中 2）测试。按照预期会在 Codex Reset Watchdog 的 Project 里看到最新的 chat 输出。
 
 ![previous runs screenshot](images/previous-runs.png)
 

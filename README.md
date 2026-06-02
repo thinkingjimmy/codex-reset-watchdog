@@ -41,7 +41,7 @@ Tasks:
 
 ### Step 3: Test The Automation
 
-After creation, click **Run Now** on the Automation detail page. As expected, you should see the latest chat output inside the `Codex Reset Watchdog` Project.
+After creation, click **Run Now** (shown as 2 in the image) on the Automation (shown as 1 in the image) detail page. As expected, you should see the latest chat output inside the `Codex Reset Watchdog` Project.
 
 ![previous runs screenshot](images/previous-runs.png)
 

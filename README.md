@@ -1,8 +1,10 @@
-# codex-reset-watchdog
+![codex-reset-watchdog banner](images/banner.png)
 
 [中文说明](README.zh-CN.md)
 
-This skill monitors public X posts from Codex lead [thsottiaux](https://x.com/thsottiaux), detects future-actionable Codex reset signals, and outputs findings through Codex Automation. It helps users learn about major changes before a reset happens, so they can spend remaining quota intentionally, including switching to fast mode when useful.
+This skill monitors public X posts from Codex lead [thsottiaux](https://x.com/thsottiaux), detects possible Codex reset signals, and outputs findings through Codex Automation. It helps users learn about reset-related changes before a reset happens, so they can spend the remaining quota in their subscription more intentionally, including switching to fast mode when useful.
+
+This skill does not require you to register any API and does not create extra costs, though running Codex Automation still consumes your Codex quota.
 
 ## How To Use?
 
@@ -10,11 +12,11 @@ This skill monitors public X posts from Codex lead [thsottiaux](https://x.com/th
 
 Create a dedicated Codex Project for this monitor, for example `Codex Reset Watchdog`.
 
-⚠️ Note: do not run the prompt below in a normal Chat.
-
 ### Step 2: In That Project, Copy The Prompt To Install The Skill And Create The Automation
 
-Open the Project you just created, start a new chat inside that Project, then paste the prompt below. Codex will install this skill, prepare the runtime files in the current workspace, run the basic checks, prime baseline state, and create the hourly Automation.
+Open the Project you just created, start a new chat inside that Project, then paste the prompt below. Codex will install this skill by itself.
+
+⚠️ Note: do not run the prompt below in a normal Chat. You must run it inside the Project you just created.
 
 ```text
 Quietly install, initialize, and enable codex-reset-watchdog:
@@ -43,7 +45,7 @@ After creation, click **Run Now** on the Automation detail page. As expected, yo
 
 ![previous runs screenshot](images/previous-runs.png)
 
-When a possible reset signal appears, the result looks like this:
+When a possible reset signal appears, the result may look like this (example):
 
 🚨 Actionable Codex reset ahead: paid ChatGPT Codex limits are scheduled to reset. Reset timing: 2026-06-03 morning (Asia/Shanghai).
 
@@ -51,20 +53,24 @@ When a possible reset signal appears, the result looks like this:
 | --- | --- | --- | --- | --- |
 | 2026-06-02 22:15 Asia/Shanghai | Said limits are "resetting tomorrow morning". | 2026-06-03 morning | 🚨 future | https://x.com/example/status/3 |
 
-Action: use remaining Codex quota before the reset; consider fast mode if it helps spend down quota.
-
 ## Want To Monitor More Sources?
 
-If you want to monitor sources beyond the `thsottiaux` account, such as other accounts, Reddit, or news feeds, you can register for [Dayclaw](https://dayclaw.com/).
+If you want to monitor accounts beyond `thsottiaux`, or other social platforms such as Reddit, Hacker News, or Product Hunt, you can try [Dayclaw](https://dayclaw.com/).
 
-## Timezone And Env
+![dayclaw screenshot](images/og-dayclaw.png)
 
-Most users do not need to modify or create an env file. With the default configuration, Codex monitors `@thsottiaux`, writes state to `var/state.json`, and displays times using the Automation runtime environment.
+## FAQ
 
-If you want finding output to use a timezone that matches your habits, create an env file and override the default `REPORT_TIMEZONE`:
+**Q: Why not use a normal chat?**
+
+Because Codex Automation sandbox restrictions can prevent required install, check, and state-write operations from completing in a normal chat. That is why this flow uses a Project.
+
+**Q: How do I set the timezone?**
+
+With the default configuration, Codex monitors `@thsottiaux`, writes state to `var/state.json`, and displays times using the Automation runtime environment. If you want findings to use another timezone, create an `env` file and override the default `REPORT_TIMEZONE`:
 
 1. Duplicate [`env.example`](env.example).
-2. Rename the copy to `env` or `.env`. `env` is easier to see in Finder; `.env` is the standard developer name.
+2. Rename the copy to `env`.
 3. Change only the fields you actually need. To force a report timezone, set `REPORT_TIMEZONE` to an IANA timezone:
 
 ```env
@@ -74,12 +80,6 @@ REPORT_TIMEZONE=America/Los_Angeles
 Common examples: `Asia/Shanghai`, `America/Los_Angeles`, `America/New_York`, `Europe/London`, `Europe/Berlin`, `UTC`.
 
 Leave `REPORT_TIMEZONE` blank to use the Automation runtime/user timezone. This is the recommended default.
-
-## FAQ
-
-**Q: Why not use a normal chat?**
-
-Because Codex Automation sandbox restrictions can prevent the required install, check, and state-write operations from completing in a normal chat. Use a Project instead.
 
 ## Skill Layout
 
@@ -98,6 +98,9 @@ codex-reset-watchdog/
   .gitignore                       # Ignores caches and local state
   agents/
     openai.yaml                    # Optional Codex skill display metadata
+  images/
+    banner.png                     # README banner image
+    previous-runs.png              # Automation run screenshot
   references/
     automation-prompt.md           # Prompt used when creating Codex Automation
     deployment.md                  # Operations checklist

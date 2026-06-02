@@ -8,9 +8,9 @@ This skill monitors public X posts from Codex lead `thsottiaux`, detects future-
 
 ### Step 1: Create A Codex Project First
 
-Create a dedicated Codex Project for this monitor, for example `Codex Reset Watchdog`. This Project is not your product repo and not the source repo you use to develop this skill; it stores a runtime copy only, giving the Automation a stable working directory, `.codex/config.toml` permissions, and persistent `var/state.json`.
+Create a dedicated Codex Project for this monitor, for example `Codex Reset Watchdog`.
 
-Do not run the prompt below in a normal Chat. A normal Chat may not have a stable cwd, may not inherit project-level `.codex/config.toml`, and may not persist state writes.
+⚠️ Note: do not run the prompt below in a normal Chat.
 
 ### Step 2: In That Project, Copy The Prompt To Install The Skill And Create The Automation
 
@@ -39,35 +39,7 @@ Tasks:
 
 ### Step 3: Test The Automation
 
-After creation, test from the Automation detail page with **Run Now**. A correct setup should show:
-
-1. Name: `Codex Reset Watchdog`
-2. Cadence: hourly, not a fixed daily time.
-3. Type: cron/project scheduled job, not a thread/heartbeat Automation attached to the current chat.
-4. Runs in / execution: choose `Local`, not `Worktree`.
-5. Project/cwd: the dedicated Project root from Step 1, containing `SKILL.md`, `scripts/check_once.mjs`, and `.codex/config.toml`.
-6. Prompt source: `references/automation-prompt.md` in the Project root.
-
-```text
-Use the $codex-reset-watchdog skill.
-
-In the configured Automation working directory, run:
-
-Command:
-node scripts/check_once.mjs --json
-
-Before running, verify `scripts/check_once.mjs` exists. If it does not, report a setup error and ask the user to rerun the install/init prompt in the dedicated Project so the runtime files are copied into the Project root. Do not search for or switch to `~/.codex/skills/codex-reset-watchdog` during Automation runs.
-
-Follow the skill's Automation run protocol. Return an emoji-led actionable/no-action report. Alert only for future actionable resets; treat completed or past reset posts as historical context.
-
-Do not emit progress narration while running. Do not inspect or update automation memory during routine runs.
-
-If JSON status is `transient_network_error`, `network_diagnostic`, or `error`, treat it as a watchdog operational issue, not a possible Codex reset. Never use the reset banners for source/network/state failures.
-
-Omit the full repeated table on routine `new_items=0` runs when no future actionable or unclear signal remains. Do not output raw JSON, process narration, or routine memory notes.
-```
-
-Do not test by pasting the Automation prompt into a normal Chat/Agent run; a normal Chat may run outside the Project runtime directory and will not inherit `.codex/config.toml` permissions, which can cause `api.dayclaw.com` DNS/HTTPS failures or `var/state.json` write failures. If Run Now reports source unreachable and mentions `EPERM`, first confirm the Project root is not just `.git` and instead contains `SKILL.md`, `scripts/`, and `.codex/`. Cron/project Automation findings appear as separate automation runs in Triage; routine output may stay inside Automations/Previous Runs.
+After creation, click **Run Now** on the Automation detail page. As expected, you should see the latest chat output inside the `Codex Reset Watchdog` Project.
 
 [previous runs screenshot](images/previous-runs.png)
 

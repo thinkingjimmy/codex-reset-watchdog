@@ -9,9 +9,9 @@
 
 ### 第一步：先创建一个 Codex Project
 
-先创建一个专门给本监控使用的 Codex Project，例如 `Codex Reset Watchdog`。这个 Project 不是你的业务项目，也不是用来开发本仓库的源码项目；它会保存一份运行文件，只给 Automation 提供稳定的 working directory、`.codex/config.toml` 权限和 `var/state.json` 持久状态。
+先创建一个专门给本监控使用的 Codex Project，例如 `Codex Reset Watchdog`。
 
-不要在普通 Chat 里运行下面的 prompt。普通 Chat 可能没有稳定 cwd、不会继承项目级 `.codex/config.toml`，也可能无法持久写入 state。
+⚠️ 注意：不要在普通 Chat 里运行下面的 prompt。
 
 ### 第二步：在 Project 里复制 prompt，安装并创建 Automation
 
@@ -40,35 +40,7 @@ https://github.com/thinkingjimmy/codex-reset-watchdog
 
 ### 第三步：测试 Automation
 
-创建完成后，在 Automation 详情页点击 Run Now 测试。正常设置应满足：
-
-1. 名称：`Codex Reset Watchdog`
-2. 频率：每小时一次，不是每天固定时间。
-3. 类型：cron/project scheduled job，不是附着在当前 chat 上的 thread/heartbeat Automation。
-4. Runs in / execution：选择 `Local`，不要选 `Worktree`。
-5. Project/cwd：使用第一步创建的专用 Project 根目录；该目录应包含 `SKILL.md`、`scripts/check_once.mjs`、`.codex/config.toml`。
-6. Prompt 来源：Project 根目录里的 `references/automation-prompt.md`。
-
-```text
-Use the $codex-reset-watchdog skill.
-
-In the configured Automation working directory, run:
-
-Command:
-node scripts/check_once.mjs --json
-
-Before running, verify `scripts/check_once.mjs` exists. If it does not, report a setup error and ask the user to rerun the install/init prompt in the dedicated Project so the runtime files are copied into the Project root. Do not search for or switch to `~/.codex/skills/codex-reset-watchdog` during Automation runs.
-
-Follow the skill's Automation run protocol. Return an emoji-led actionable/no-action report. Alert only for future actionable resets; treat completed or past reset posts as historical context.
-
-Do not emit progress narration while running. Do not inspect or update automation memory during routine runs.
-
-If JSON status is `transient_network_error`, `network_diagnostic`, or `error`, treat it as a watchdog operational issue, not a possible Codex reset. Never use the reset banners for source/network/state failures.
-
-Omit the full repeated table on routine `new_items=0` runs when no future actionable or unclear signal remains. Do not output raw JSON, process narration, or routine memory notes.
-```
-
-不要把 Automation prompt 复制到普通 Chat/Agent 里当测试；普通 Chat 可能不在 Project 运行目录运行，也不会继承 `.codex/config.toml` 权限，容易出现 `api.dayclaw.com` DNS/HTTPS 失败或 `var/state.json` 无法写入。若 Run Now 报 source unreachable 且提到 `EPERM`，先确认 Project 根目录不是只有 `.git`，而是包含 `SKILL.md`、`scripts/` 和 `.codex/`。Cron/project Automation 的 finding 会作为独立 automation run 进入 Triage；普通运行输出可能只留在 Automations/Previous Runs 里。
+创建完成后，在 Automation 详情页点击 Run Now 测试。按照预期会在 Codex Reset Watchdog 的 Project 里看到最新的 chat 输出。
 
 [previous runs screenshot](images/previous-runs.png)
 

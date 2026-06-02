@@ -2,8 +2,7 @@
 
 [English README](README.md)
 
-本 skill 的主要作用是通过监控 Codex 负责人 thsottiaux 在 X 上的公开动态，及时发现未来仍可行动的 Codex reset 信号，并通过 Codex Automation 输出 finding，帮助用户在 reset 前了解可能影响 Codex 使用的重大变更，从而更有意识地消耗剩余额度，必要时切换 fast 模式，减少浪费。
-
+本 skill 的主要作用是通过监控 Codex 负责人 [thsottiaux](https://x.com/thsottiaux) 在 X 上的公开动态，及时发现未来仍可行动的 Codex reset 信号，并通过 Codex Automation 输出 finding，帮助用户在 reset 前了解可能影响 Codex 使用的重大变更，从而更有意识地消耗剩余额度，必要时切换 fast 模式，减少浪费。
 
 ## 如何使用？
 
@@ -44,6 +43,17 @@ https://github.com/thinkingjimmy/codex-reset-watchdog
 
 ![previous runs screenshot](images/previous-runs.png)
 
+当出现可能的 reset 信号时，会出现如下结果：
+
+🚨 Actionable Codex reset ahead: paid ChatGPT Codex limits are scheduled to reset. Reset timing: 2026-06-03 morning (Asia/Shanghai).
+
+| Time | Evidence | Reset timing | Actionability | Link |
+| --- | --- | --- | --- | --- |
+| 2026-06-02 22:15 Asia/Shanghai | Said limits are "resetting tomorrow morning". | 2026-06-03 morning | 🚨 future | https://x.com/example/status/3 |
+
+Action: use remaining Codex quota before the reset; consider fast mode if it helps spend down quota.
+
+
 ## 想要监控更多信息？
 
 如果你想要监控 thsottiaux 账号以外的信息，比如其他账号、Reddit、新闻源等，你可以注册 [Dayclaw](https://dayclaw.com/)。
@@ -63,6 +73,12 @@ REPORT_TIMEZONE=America/Los_Angeles
 常见示例：`Asia/Shanghai`、`America/Los_Angeles`、`America/New_York`、`Europe/London`、`Europe/Berlin`、`UTC`。
 
 留空 `REPORT_TIMEZONE` 会使用 Automation 运行环境/用户时区。这是默认推荐方式。
+
+## FAQ
+
+**Q: 为何不能使用普通 chat？**
+
+因为 Codex 的 Automation 的 sandbox 限制，导致一些必要的安装、检查、state 写入等操作在普通 chat 里无法完成，所以需要使用 Project。
 
 ## Skill 结构
 

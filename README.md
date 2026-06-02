@@ -2,7 +2,7 @@
 
 [中文说明](README.zh-CN.md)
 
-This skill monitors public X posts from Codex lead `thsottiaux`, detects future-actionable Codex reset signals, and outputs findings through Codex Automation. It helps users learn about major changes before a reset happens, so they can spend remaining quota intentionally, including switching to fast mode when useful.
+This skill monitors public X posts from Codex lead [thsottiaux](https://x.com/thsottiaux), detects future-actionable Codex reset signals, and outputs findings through Codex Automation. It helps users learn about major changes before a reset happens, so they can spend remaining quota intentionally, including switching to fast mode when useful.
 
 ## How To Use?
 
@@ -43,6 +43,16 @@ After creation, click **Run Now** on the Automation detail page. As expected, yo
 
 ![previous runs screenshot](images/previous-runs.png)
 
+When a possible reset signal appears, the result looks like this:
+
+🚨 Actionable Codex reset ahead: paid ChatGPT Codex limits are scheduled to reset. Reset timing: 2026-06-03 morning (Asia/Shanghai).
+
+| Time | Evidence | Reset timing | Actionability | Link |
+| --- | --- | --- | --- | --- |
+| 2026-06-02 22:15 Asia/Shanghai | Said limits are "resetting tomorrow morning". | 2026-06-03 morning | 🚨 future | https://x.com/example/status/3 |
+
+Action: use remaining Codex quota before the reset; consider fast mode if it helps spend down quota.
+
 ## Want To Monitor More Sources?
 
 If you want to monitor sources beyond the `thsottiaux` account, such as other accounts, Reddit, or news feeds, you can register for [Dayclaw](https://dayclaw.com/).
@@ -64,6 +74,12 @@ REPORT_TIMEZONE=America/Los_Angeles
 Common examples: `Asia/Shanghai`, `America/Los_Angeles`, `America/New_York`, `Europe/London`, `Europe/Berlin`, `UTC`.
 
 Leave `REPORT_TIMEZONE` blank to use the Automation runtime/user timezone. This is the recommended default.
+
+## FAQ
+
+**Q: Why not use a normal chat?**
+
+Because Codex Automation sandbox restrictions can prevent the required install, check, and state-write operations from completing in a normal chat. Use a Project instead.
 
 ## Skill Layout
 

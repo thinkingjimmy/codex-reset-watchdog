@@ -41,7 +41,7 @@ Tasks:
 
 After creation, click **Run Now** on the Automation detail page. As expected, you should see the latest chat output inside the `Codex Reset Watchdog` Project.
 
-[previous runs screenshot](images/previous-runs.png)
+![previous runs screenshot](images/previous-runs.png)
 
 ## Want To Monitor More Sources?
 

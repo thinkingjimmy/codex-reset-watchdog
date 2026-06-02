@@ -42,7 +42,7 @@ https://github.com/thinkingjimmy/codex-reset-watchdog
 
 创建完成后，在 Automation 详情页点击 Run Now 测试。按照预期会在 Codex Reset Watchdog 的 Project 里看到最新的 chat 输出。
 
-[previous runs screenshot](images/previous-runs.png)
+![previous runs screenshot](images/previous-runs.png)
 
 ## 想要监控更多信息？
 
